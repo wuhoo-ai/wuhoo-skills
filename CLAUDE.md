@@ -1,0 +1,40 @@
+# Skills Repository CLAUDE.md
+
+OpenClaw 自定义技能仓库。所有 skills 通过 `~/.openclaw/skills/` 软链接加载。
+
+## Skills 列表
+
+### 企业级关键 Skills (wuhoo-*)
+| Skill | 目录 | 用途 |
+|-------|------|------|
+| wuhoo-stock-deep-analysis | `wuhoo-stock-deep-analysis/` | Workflow B — 单股深度分析 |
+| wuhoo-stock-autopick-trade | `wuhoo-stock-autopick-trade/` | Workflow C — 多市场自动选股 |
+| wuhoo-trade-diagnose | `wuhoo-trade-diagnose/` | Workflow D — 持仓诊断与调仓 |
+| wuhoo-news-rss | `wuhoo-news-rss/` | RSS 资讯引擎 |
+
+### 交易相关 Skills
+| Skill | 目录 | 用途 |
+|-------|------|------|
+| futu-api | `futu-api/` | 富途 OpenAPI 行情交易 (57 脚本) |
+| install-futu-opend | `install-futu-opend/` | Futu OpenD 安装助手 |
+
+### 选股 Skills
+| Skill | 目录 | 用途 |
+|-------|------|------|
+| stock-pick | `stock-pick/` | A股因子选股 |
+
+## Skill 开发规范
+
+- 每个 skill 必须有 `SKILL.md` 文件
+- SKILL.md 包含：用途描述、使用示例、依赖说明
+- 运行时数据（data/, venv/）放入 .gitignore
+- 修改 wuhoo-* skills 时需要特别谨慎，承担核心业务价值
+
+## 软链接
+
+```
+~/.openclaw/skills/ → ~/skills-openclaw/
+~/.openclaw/workspace/agents/main/skills/ → ~/skills-openclaw/
+```
+
+openclaw.json 通过 `skills.load.extraDirs: ["~/.openclaw/skills"]` 加载。

@@ -11,7 +11,7 @@ Wuhoo 技能仓库。与 Agent 网关选型无关，可独立迭代。
 | Skill | 目录 | 用途 |
 |-------|------|------|
 | wuhoo-stock-deep-analysis | `wuhoo-stock-deep-analysis/` | Workflow B — 单股深度分析 |
-| wuhoo-stock-autopick-trade | `wuhoo-stock-autopick-trade/` | Workflow C — 多市场自动选股 |
+| wuhoo-stock-trade | `wuhoo-stock-trade/` | Workflow C — 多市场交易执行 |
 | wuhoo-trade-diagnose | `wuhoo-trade-diagnose/` | Workflow D — 持仓诊断与调仓 |
 | wuhoo-news-rss | `wuhoo-news-rss/` | RSS 资讯引擎 |
 
@@ -24,7 +24,7 @@ Wuhoo 技能仓库。与 Agent 网关选型无关，可独立迭代。
 ### 选股 Skills
 | Skill | 目录 | 用途 |
 |-------|------|------|
-| stock-pick | `stock-pick/` | A股因子选股 |
+| wuhoo-stock-pick | `wuhoo-stock-pick/` | A/HK/US 可配置因子选股 |
 
 ## Skill 开发规范
 

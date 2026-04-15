@@ -126,7 +126,7 @@ DataAggregator._get_combined_sentiment()
   加权平均 → sentiment_score (-1 ~ +1)
 ```
 
-调用路径：`workflow_b_deep_analysis.py → DataAggregator → news_rss.get_sentiment_data(symbol, company_name)`
+调用路径：`wuhoo-stock-deep-analysis/strategy_report.py → DataAggregator → news_rss.get_sentiment_data(symbol, company_name)`
 
 ## 依赖
 

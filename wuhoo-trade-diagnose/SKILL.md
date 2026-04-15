@@ -40,29 +40,33 @@ Step 6: 保存为行动指南 (供下次定时任务使用)
 ## 使用方式
 
 ```bash
-cd ~/.openclaw/workspace/agents/trade
-source venv-futu/bin/activate
+# 由 debate agent 触发（推荐，独立审计上下文）
+cd ~/.openclaw/workspace/agents/debate
+python workflow_diagnose.py
+
+# 直接调用 skill
+python ~/.openclaw/skills/wuhoo-trade-diagnose/diagnose.py
 
 # 全市场诊断
-python workflow_d_trade_diagnose.py
+python ~/.openclaw/skills/wuhoo-trade-diagnose/diagnose.py
 
 # 仅港股诊断
-python workflow_d_trade_diagnose.py --market HK
+python ~/.openclaw/skills/wuhoo-trade-diagnose/diagnose.py --market HK
 
 # A股指定账户
-python workflow_d_trade_diagnose.py --market CN --account-id 18767295
+python ~/.openclaw/skills/wuhoo-trade-diagnose/diagnose.py --market CN --account-id 18767295
 
 # 快速模式：跳过 Workflow B 重评估（仅持仓扫描 + 组合风险）
-python workflow_d_trade_diagnose.py --market HK --skip-re-eval
+python ~/.openclaw/skills/wuhoo-trade-diagnose/diagnose.py --market HK --skip-re-eval
 
 # 仅诊断前 5 只持仓（按市值排序）
-python workflow_d_trade_diagnose.py --top-n 5
+python ~/.openclaw/skills/wuhoo-trade-diagnose/diagnose.py --top-n 5
 
 # 指定日期
-python workflow_d_trade_diagnose.py --market US --date 2026-04-13
+python ~/.openclaw/skills/wuhoo-trade-diagnose/diagnose.py --market US --date 2026-04-13
 
 # 仅输出 JSON（不生成 Markdown 报告）
-python workflow_d_trade_diagnose.py --skip-re-eval --json
+python ~/.openclaw/skills/wuhoo-trade-diagnose/diagnose.py --skip-re-eval --json
 ```
 
 ### 参数说明
@@ -117,7 +121,7 @@ python workflow_d_trade_diagnose.py --skip-re-eval --json
 | 数据源 | 内容 | 说明 |
 |--------|------|------|
 | **Futu OpenD** | 实时持仓、资金、盈亏 | 通过 futu-api get_portfolio |
-| **Workflow B** | 逐股深度分析 | 调用 workflow_b_deep_analysis.py |
+| **Workflow B** | 逐股深度分析 | 调用 wuhoo-stock-deep-analysis/deep_analysis.py |
 | **risk_manager** | 风控规则检查 | 仓位/止损/黑名单 |
 | **portfolio_metrics** | 组合级指标计算 | Sharpe/HHI/集中度/回撤 |
 
@@ -143,7 +147,7 @@ pip install pandas numpy
 | Skill | 对应 Workflow | 用途 |
 |-------|--------------|------|
 | wuhoo-stock-deep-analysis | Workflow B | 单股深度分析，用户指定个股 |
-| wuhoo-stock-autopick-trade | Workflow C | 多市场自动选股交易流水线 |
+| wuhoo-stock-trade | Workflow C | 多市场自动选股交易流水线 |
 | wuhoo-trade-diagnose | Workflow D | 持仓诊断与调仓建议（本 skill） |
 
 **调用关系**：Workflow D 调用 Workflow B 对每只持仓做重评估，复用 risk_manager 做风控检查。

@@ -23,6 +23,7 @@ A 股完整因子:
 """
 
 import argparse
+import json
 import os
 import shutil
 import sys
@@ -39,18 +40,21 @@ import efinance as ef
 warnings.filterwarnings('ignore')
 
 # ============== 配置 ==============
-DATA_DIR = Path.home() / '.openclaw' / 'workspace' / 'agents' / 'main' / 'data' / 'stock-pick'
+DATA_DIR = Path.home() / '.openclaw' / 'data' / 'stock-pick'
 DAILY_DATA_DIR = DATA_DIR / 'daily_data'
 TURNOVER_DATA_DIR = DATA_DIR / 'turnover_data'
 FACTORS_DIR = DATA_DIR / 'factors'
 BACKUPS_DIR = DATA_DIR / 'backups'
 
-# 选股参数
+# 选股参数（默认值，可通过 CLI 或 JSON 覆盖）
 VOLATILITY_PERCENTILE = 0.50
 TURNOVER_PERCENTILE = 0.50
 MOMENTUM_5D_PERCENTILE = 0.30
 BETA_PERCENTILE = 0.30
 TOP_N = 10
+
+# 运行时因子配置（通过 --factors-json 加载）
+FACTOR_CONFIG = {}
 
 # 市场配置
 MARKET_CONFIG = {
@@ -72,6 +76,48 @@ MARKET_CONFIG = {
 }
 
 INDEX_CODE = '000852.SH'  # 中证 1000 指数代码
+
+# ============== 因子配置 ==============
+
+def load_factors_config(json_path=None):
+    """加载因子配置，支持 JSON 文件或默认值"""
+    global FACTOR_CONFIG
+    if json_path and Path(json_path).exists():
+        with open(json_path, 'r') as f:
+            FACTOR_CONFIG = json.load(f)
+        print(f"  因子配置已加载：{json_path}")
+    return FACTOR_CONFIG
+
+def get_percentile(factor_name, market='cn'):
+    """获取指定因子的分位阈值，优先使用配置值"""
+    defaults = {
+        'residual_vol': VOLATILITY_PERCENTILE,
+        'volatility': VOLATILITY_PERCENTILE,
+        'turnover_5d': TURNOVER_PERCENTILE,
+        'momentum_5d': MOMENTUM_5D_PERCENTILE,
+        'beta_20d': BETA_PERCENTILE,
+    }
+    if market in FACTOR_CONFIG:
+        pct = FACTOR_CONFIG[market].get('percentiles', {})
+        return pct.get(factor_name, defaults.get(factor_name, 0.50))
+    return defaults.get(factor_name, 0.50)
+
+def get_top_n():
+    """获取选股数量，优先使用配置值"""
+    if 'cn' in FACTOR_CONFIG:
+        return FACTOR_CONFIG['cn'].get('top_n', TOP_N)
+    return TOP_N
+
+def get_sort_config(market='cn'):
+    """获取排序配置"""
+    defaults = {'factor': 'momentum_10d', 'ascending': True}
+    if market in FACTOR_CONFIG:
+        cfg = FACTOR_CONFIG[market]
+        return {
+            'factor': cfg.get('sort_factor', defaults['factor']),
+            'ascending': cfg.get('sort_ascending', defaults['ascending']),
+        }
+    return defaults
 
 # ============== 工具函数 ==============
 
@@ -722,122 +768,138 @@ def calculate_factors_simple(market, target_date):
 # ============== 选股逻辑 ==============
 
 def select_stocks(factors_df, has_turnover=True):
-    """执行选股逻辑 (A 股完整因子)"""
+    """执行选股逻辑 (A 股完整因子)，支持可配置因子"""
     df = factors_df.copy()
+    vol_pct = get_percentile('residual_vol', 'cn')
+    turn_pct = get_percentile('turnover_5d', 'cn')
+    mom_pct = get_percentile('momentum_5d', 'cn')
+    beta_pct = get_percentile('beta_20d', 'cn')
+    top_n = get_top_n()
+    sort_cfg = get_sort_config('cn')
 
     print("\n=== 选股过程 ===")
     print(f"\n1. 初始股票池：{len(df)} 只")
 
     # 1. 残差波动率 (越低越好)
-    threshold = df['residual_vol'].quantile(VOLATILITY_PERCENTILE)
+    threshold = df['residual_vol'].quantile(vol_pct)
     df = df[df['residual_vol'] <= threshold]
-    print(f"2. 252 日残差波动率 (≤{threshold:.4f}, 前{VOLATILITY_PERCENTILE*100:.0f}%)：{len(df)} 只")
+    print(f"2. 252 日残差波动率 (≤{threshold:.4f}, 前{vol_pct*100:.0f}%)：{len(df)} 只")
 
     if len(df) == 0:
         return df
 
     # 2. 换手率/成交量 (越高越好)
-    threshold = df['turnover_5d'].quantile(1 - TURNOVER_PERCENTILE)
+    threshold = df['turnover_5d'].quantile(1 - turn_pct)
     df = df[df['turnover_5d'] >= threshold]
     if has_turnover:
-        print(f"3. 5 日平均换手率 (≥{threshold:.2f}%, 前{TURNOVER_PERCENTILE*100:.0f}%)：{len(df)} 只")
+        print(f"3. 5 日平均换手率 (≥{threshold:.2f}%, 前{turn_pct*100:.0f}%)：{len(df)} 只")
     else:
-        print(f"3. 5 日平均成交量 [代理] (≥{threshold:.2f}, 前{TURNOVER_PERCENTILE*100:.0f}%)：{len(df)} 只")
+        print(f"3. 5 日平均成交量 [代理] (≥{threshold:.2f}, 前{turn_pct*100:.0f}%)：{len(df)} 只")
 
     if len(df) == 0:
         return df
 
     # 3. 5 日动量 (越高越好)
-    threshold = df['momentum_5d'].quantile(1 - MOMENTUM_5D_PERCENTILE)
+    threshold = df['momentum_5d'].quantile(1 - mom_pct)
     df = df[df['momentum_5d'] >= threshold]
-    print(f"4. 5 日价格动量 ROC(≥{threshold:.2f}%, 前{MOMENTUM_5D_PERCENTILE*100:.0f}%)：{len(df)} 只")
+    print(f"4. 5 日价格动量 ROC(≥{threshold:.2f}%, 前{mom_pct*100:.0f}%)：{len(df)} 只")
 
     if len(df) == 0:
         return df
 
     # 4. Beta (越高越好)
-    threshold = df['beta_20d'].quantile(1 - BETA_PERCENTILE)
+    threshold = df['beta_20d'].quantile(1 - beta_pct)
     df = df[df['beta_20d'] >= threshold]
-    print(f"5. 20 日 Beta 值 (≥{threshold:.3f}, 前{BETA_PERCENTILE*100:.0f}%)：{len(df)} 只")
+    print(f"5. 20 日 Beta 值 (≥{threshold:.3f}, 前{beta_pct*100:.0f}%)：{len(df)} 只")
 
     if len(df) == 0:
         return df
 
-    # 最终排序：10 日动量，越低越好
-    df = df.sort_values('momentum_10d', ascending=True)
-    return df.head(TOP_N)
+    # 最终排序：按配置的排序因子
+    df = df.sort_values(sort_cfg['factor'], ascending=sort_cfg['ascending'])
+    return df.head(top_n)
 
 
 def select_stocks_us_complete(factors_df):
-    """执行选股逻辑 (美股完整因子)"""
+    """执行选股逻辑 (美股完整因子)，支持可配置因子"""
     df = factors_df.copy()
+    vol_pct = get_percentile('residual_vol', 'us')
+    turn_pct = get_percentile('turnover_5d', 'us')
+    mom_pct = get_percentile('momentum_5d', 'us')
+    beta_pct = get_percentile('beta_20d', 'us')
+    top_n = get_top_n()
 
     print("\n=== 选股过程 (美股完整因子) ===")
     print(f"\n1. 初始股票池：{len(df)} 只")
 
     # 1. 残差波动率 (越低越好)
-    threshold = df['residual_vol'].quantile(VOLATILITY_PERCENTILE)
+    threshold = df['residual_vol'].quantile(vol_pct)
     df = df[df['residual_vol'] <= threshold]
-    print(f"2. 252 日残差波动率 (≤{threshold:.4f}, 前{VOLATILITY_PERCENTILE*100:.0f}%)：{len(df)} 只")
+    print(f"2. 252 日残差波动率 (≤{threshold:.4f}, 前{vol_pct*100:.0f}%)：{len(df)} 只")
 
     if len(df) == 0:
         return df
 
     # 2. 成交量 (越高越好)
-    threshold = df['turnover_5d'].quantile(1 - TURNOVER_PERCENTILE)
+    threshold = df['turnover_5d'].quantile(1 - turn_pct)
     df = df[df['turnover_5d'] >= threshold]
-    print(f"3. 5 日平均成交量 [log] (≥{threshold:.2f}, 前{TURNOVER_PERCENTILE*100:.0f}%)：{len(df)} 只")
+    print(f"3. 5 日平均成交量 [log] (≥{threshold:.2f}, 前{turn_pct*100:.0f}%)：{len(df)} 只")
 
     if len(df) == 0:
         return df
 
     # 3. 5 日动量 (越高越好)
-    threshold = df['momentum_5d'].quantile(1 - MOMENTUM_5D_PERCENTILE)
+    threshold = df['momentum_5d'].quantile(1 - mom_pct)
     df = df[df['momentum_5d'] >= threshold]
-    print(f"4. 5 日价格动量 ROC(≥{threshold:.2f}%, 前{MOMENTUM_5D_PERCENTILE*100:.0f}%)：{len(df)} 只")
+    print(f"4. 5 日价格动量 ROC(≥{threshold:.2f}%, 前{mom_pct*100:.0f}%)：{len(df)} 只")
 
     if len(df) == 0:
         return df
 
     # 4. Beta (越高越好)
-    threshold = df['beta_20d'].quantile(1 - BETA_PERCENTILE)
+    threshold = df['beta_20d'].quantile(1 - beta_pct)
     df = df[df['beta_20d'] >= threshold]
-    print(f"5. 20 日 Beta 值 (≥{threshold:.3f}, 前{BETA_PERCENTILE*100:.0f}%)：{len(df)} 只")
+    print(f"5. 20 日 Beta 值 (≥{threshold:.3f}, 前{beta_pct*100:.0f}%)：{len(df)} 只")
 
     if len(df) == 0:
         return df
 
-    # 最终排序：10 日动量，越低越好
-    df = df.sort_values('momentum_10d', ascending=True)
-    return df.head(TOP_N)
+    # 最终排序
+    sort_cfg = get_sort_config('us')
+    df = df.sort_values(sort_cfg['factor'], ascending=sort_cfg['ascending'])
+    return df.head(top_n)
 
 
 def select_stocks_simple(factors_df, market='hk'):
-    """执行选股逻辑 (港股简化因子)"""
+    """执行选股逻辑 (港股简化因子)，支持可配置因子"""
     df = factors_df.copy()
+    vol_pct = get_percentile('volatility', market)
+    mom_pct = get_percentile('momentum_5d', market)
+    top_n = get_top_n()
 
     print(f"\n=== 选股过程 ({market.upper()} 简化因子) ===")
     print(f"\n1. 初始股票池：{len(df)} 只")
 
     # 1. 波动率 (越低越好)
-    threshold = df['volatility'].quantile(VOLATILITY_PERCENTILE)
+    threshold = df['volatility'].quantile(vol_pct)
     df = df[df['volatility'] <= threshold]
-    print(f"2. 252 日波动率 (≤{threshold:.4f}, 前{VOLATILITY_PERCENTILE*100:.0f}%)：{len(df)} 只")
+    print(f"2. 252 日波动率 (≤{threshold:.4f}, 前{vol_pct*100:.0f}%)：{len(df)} 只")
 
     if len(df) == 0:
         return df
 
     # 2. 5 日动量 (越高越好)
-    threshold = df['momentum_5d'].quantile(1 - MOMENTUM_5D_PERCENTILE)
+    threshold = df['momentum_5d'].quantile(1 - mom_pct)
     df = df[df['momentum_5d'] >= threshold]
-    print(f"3. 5 日价格动量 ROC(≥{threshold:.2f}%, 前{MOMENTUM_5D_PERCENTILE*100:.0f}%)：{len(df)} 只")
+    print(f"3. 5 日价格动量 ROC(≥{threshold:.2f}%, 前{mom_pct*100:.0f}%)：{len(df)} 只")
 
     if len(df) == 0:
         return df
 
-    # 最终排序：10 日动量，越低越好
-    df = df.sort_values('momentum_10d', ascending=True)
-    return df.head(TOP_N)
+    # 最终排序
+    sort_cfg = get_sort_config(market)
+    df = df.sort_values(sort_cfg['factor'], ascending=sort_cfg['ascending'])
+    return df.head(top_n)
 
 def print_results(result, target_date, has_turnover=True, market="cn", use_complete_factors=False):
     """打印选股结果"""
@@ -896,10 +958,23 @@ def main():
     parser.add_argument('--date', type=str, help='选股日期')
     parser.add_argument('--update-data', action='store_true', help='更新数据 (仅 A 股)')
     parser.add_argument('--force', action='store_true', help='强制更新')
-    
+    parser.add_argument('--top-n', type=int, default=None, help='最终选股数量（覆盖默认值）')
+    parser.add_argument('--factors-json', type=str, default=None,
+                        help='因子配置 JSON 文件路径')
+
     args = parser.parse_args()
     market = args.market
     ensure_dirs()
+
+    # 加载因子配置
+    if args.factors_json:
+        load_factors_config(args.factors_json)
+
+    # CLI --top-n 覆盖
+    if args.top_n is not None:
+        global TOP_N
+        TOP_N = args.top_n
+        FACTOR_CONFIG.setdefault(market, {})['top_n'] = TOP_N
     
     # 检查市场配置
     if market not in MARKET_CONFIG:

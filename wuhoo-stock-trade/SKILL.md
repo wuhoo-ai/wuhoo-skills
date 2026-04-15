@@ -1,10 +1,10 @@
 ---
-name: wuhoo-stock-autopick-trade
-description: "多市场自动选股交易全链路（Workflow C）。支持 A股/港股/美股，覆盖选股→多维度分析→多空辩论→投资建议→风控→交易执行→复盘的完整流程。wuhoo 冠名 skill 为 OpenClaw 企业级关键 skill，需重点维护。"
+name: wuhoo-stock-trade
+description: "多市场交易执行（Workflow C）。接收选股结果、分析结果、辩论结果作为输入，执行风控检查、交易模拟/实盘、复盘。wuhoo 冠名 skill 为 OpenClaw 企业级关键 skill，需重点维护。"
 metadata: { "openclaw": { "emoji": "⚡", "requires": { "bins": ["python3"] } } }
 ---
 
-# wuhoo-stock-autopick-trade — 多市场自动选股交易（Workflow C）
+# wuhoo-stock-trade — 多市场交易执行（Workflow C）
 
 > **⚠️ 企业级关键 Skill**
 > 以 `wuhoo-` 冠头的 skill 是当前 OpenClaw 系统的**企业级关键 skill**，承担核心业务价值。
@@ -12,38 +12,68 @@ metadata: { "openclaw": { "emoji": "⚡", "requires": { "bins": ["python3"] } } 
 
 ## 功能概述
 
-多市场（A股/港股/美股）自动化选股交易全链路。每日自动执行从选股到复盘的完整流程，是量化交易的核心引擎。
+接收上游 Skill 的输出作为输入，执行风控检查、交易模拟/实盘操作、每日复盘。是量化交易的**执行引擎**，不再包含选股过程。
 
-**适用场景**：
-- 每日定时执行多市场选股和交易分析
-- 对选定市场进行完整的量化投资流水线
-- 生成当日投资建议和综合分析报告
+**输入依赖**：
+1. 选股结果（来自 `wuhoo-stock-pick`）
+2. 多维度分析结果（来自 `wuhoo-stock-deep-analysis`）
+3. 多空辩论结果（来自 debate agent）
 
 ## 完整流程
 
 ```
-Step 1: 选股 (stock-pick)
+输入: 选股结果 + 分析结果 + 辩论结果
     ↓
-Step 2: 多维度分析 (技术面/基本面/舆情面)
+Step 1: 投资建议整合（综合上游结果）
     ↓
-Step 3: 多空辩论 (Bull/Bear/Trader/Risk)
+Step 2: 风控检查 + 人工审批
     ↓
-Step 4: 投资建议生成
+Step 3: 交易执行（模拟盘 / 实盘）
     ↓
-Step 5: 风控检查 + 人工审批 + 交易执行
-    ↓
-Step 6: 每日复盘报告
+Step 4: 每日复盘报告
     ↓
 审计报告 (Audit)
 ```
 
 ## 市场支持
 
-| 市场 | 代码 | 数据源 | 交易执行 | 因子配置 |
-|------|------|--------|----------|----------|
-| A股 | CN | Tushare | 富途 OpenAPI (OpenCNTradeContext) | 残差波动率 + 换手率 + 动量 + Beta |
-| 港股 | HK | 富途 OpenAPI | 富途 OpenAPI (OpenHKTradeContext) | 波动率 + 动量 |
-| 美股 | US | yfinance | 富途 OpenAPI (OpenUSTradeContext) | 残差波动率 + 成交量 + 动量 + Beta |
+| 市场 | 代码 | 数据源 | 交易执行 |
+|------|------|--------|----------|
+| A股 | CN | Tushare | 富途 OpenAPI (OpenCNTradeContext) |
+| 港股 | HK | 富途 OpenAPI | 富途 OpenAPI (OpenHKTradeContext) |
+| 美股 | US | yfinance | 富途 OpenAPI (OpenUSTradeContext) |
+
+## 输入格式约定
+
+### 选股结果 (`01_selected_stocks.json`)
+
+```json
+[
+  {
+    "ts_code": "00700.HK",
+    "name": "腾讯控股",
+    "score": 0.85,
+    "factors": {"volatility": 0.12, "momentum_5d": 3.2}
+  }
+]
+```
+
+### 分析结果 (`02_analysis_results.json`)
+
+每只股票的技术面/基本面/舆情面分析。
+
+### 辩论结果 (`03_debate_results.json`)
+
+```json
+{
+  "00700.HK": {
+    "bull_score": 8,
+    "bear_score": 3,
+    "consensus": "BUY",
+    "confidence": 0.75
+  }
+}
+```
 
 ## 使用方式
 
@@ -62,9 +92,6 @@ python workflow_c_multi_market.py --market us --date 2026-04-09 --skip-trades
 
 # 启用人工审批（大额交易需要确认）
 python workflow_c_multi_market.py --market hk --with-approval
-
-# A股深度分析版（使用 workflow_c_cn_analysis.py）
-python workflow_c_cn_analysis.py
 ```
 
 ### 参数说明
@@ -73,7 +100,6 @@ python workflow_c_cn_analysis.py
 |------|------|--------|
 | `--market` | 市场 (cn/hk/us) | HK |
 | `--date` | 交易日期 (YYYY-MM-DD) | 今天 |
-| `--top-n` | 选股数量 | 10 |
 | `--skip-trades` | 跳过交易执行 | False |
 | `--with-approval` | 启用人工审批 | False |
 | `--skip-review` | 跳过每日复盘 | False |
@@ -82,9 +108,9 @@ python workflow_c_cn_analysis.py
 
 ```
 ~/.openclaw/workspace/agents/trade/data/workflow_c/{MARKET}_{DATE}/
-├── 01_selected_stocks.json       # 选股结果
-├── 02_analysis_results.json      # 多维度分析
-├── 03_debate_results.json        # 多空辩论结果
+├── 01_selected_stocks.json       # 选股结果（输入）
+├── 02_analysis_results.json      # 多维度分析（输入）
+├── 03_debate_results.json        # 多空辩论结果（输入）
 ├── 04_recommendations.json       # 投资建议
 ├── 05_trade_results.json         # 交易执行结果（如有）
 ├── 05_audit_report.json          # 审计报告
@@ -113,27 +139,22 @@ python workflow_c_cn_analysis.py
 ## 依赖
 
 ```bash
-# 富途交易环境
 cd ~/.openclaw/workspace/agents/trade
 source venv-futu/bin/activate
 pip install futu-api pandas
-
-# A股需要额外依赖
-cd ~/.openclaw/workspace/agents/main/skills/stock-pick
-source venv/bin/activate
-pip install tushare pandas
 ```
 
 ## 与其他 Workflow 的关系
 
 | Skill | 对应 Workflow | 用途 |
 |-------|--------------|------|
-| wuhoo-stock-deep-analysis | Workflow B | 单股深度分析，用户指定个股 |
-| wuhoo-stock-autopick-trade | Workflow C | 多市场自动选股交易流水线 |
-| stock-pick | 选股子模块 | A股多因子选股（被 Workflow C 调用） |
+| wuhoo-stock-pick | 选股 | 多因子选股（上游输入） |
+| wuhoo-stock-deep-analysis | Workflow B | 单股深度分析（上游输入） |
+| wuhoo-stock-trade | Workflow C | 多市场交易执行（本 skill） |
+| wuhoo-trade-diagnose | Workflow D | 持仓诊断（监督） |
 
 ---
 
 *创建时间：2026-04-09*
-*版本：1.0*
-*封装自 workflow_c_multi_market.py + workflow_c_cn_analysis.py*
+*更新时间：2026-04-15*
+*版本：2.0 — 剥离选股，接收上游结果，重命名 wuhoo-stock-trade*

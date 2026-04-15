@@ -45,16 +45,16 @@ metadata: { "openclaw": { "emoji": "🔬", "requires": { "bins": ["python3.11"],
 
 ```bash
 # 增强版深度分析（推荐，整合 akshare 财务数据）
-python workflow_b_deep_analysis.py --code 600519
+python ~/.openclaw/skills/wuhoo-stock-deep-analysis/deep_analysis.py --code 600519
 
 # 港股
-python workflow_b_deep_analysis.py --code 00700 --name 腾讯控股
+python ~/.openclaw/skills/wuhoo-stock-deep-analysis/deep_analysis.py --code 00700 --name 腾讯控股
 
 # 美股（仅因子分析，无 akshare 财务数据）
-python workflow_b_deep_analysis.py --code US.AAPL --name Apple
+python ~/.openclaw/skills/wuhoo-stock-deep-analysis/deep_analysis.py --code US.AAPL --name Apple
 
-# 兼容旧版（因子数据 + 辩论）
-python workflow_b_strategy_report.py --symbol 600519.SH
+# 策略报告版（因子数据 + 辩论）
+python ~/.openclaw/skills/wuhoo-stock-deep-analysis/strategy_report.py --symbol 600519.SH
 ```
 
 ## 输出
@@ -88,7 +88,7 @@ python workflow_b_strategy_report.py --symbol 600519.SH
 
 **可靠性等级**: A(80+) / B(60-79) / C(40-59) / D(<40)
 
-扣分规则详见 `workflow_b_audit.py` 中的 `DEDUCTION_RULES`。
+扣分规则详见 `b_audit.py` 中的 `DEDUCTION_RULES`。
 
 ## 数据源
 

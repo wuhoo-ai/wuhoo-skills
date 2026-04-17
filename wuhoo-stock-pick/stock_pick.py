@@ -675,7 +675,7 @@ def calculate_factors_simple(market, target_date):
         for code in batch:
             # 确定市场
             if market == 'hk':
-                stock_code = f"HK.{code.replace('.HK', '')}"
+                stock_code = code if code.startswith('HK.') else f"HK.{code}"
             else:
                 continue
 
@@ -719,7 +719,7 @@ def calculate_factors_simple(market, target_date):
                     continue
 
                 results.append({
-                    'ts_code': code if '.HK' in code or '.US' in code else f"{code}.{market.upper()}",
+                    'ts_code': code,
                     'volatility': volatility,
                     'momentum_5d': momentum_5d,
                     'momentum_10d': momentum_10d
@@ -736,17 +736,25 @@ def calculate_factors_simple(market, target_date):
     result_df = pd.DataFrame(results)
 
     # 添加股票名称
-    # 港股/美股从对应的 stock_info 文件获取名称
     if market in ['hk', 'us']:
+        # 优先尝试 stock_info 文件
         info_file = DATA_DIR / f'stock_info_{market}_top500.csv'
         if info_file.exists():
             try:
                 info_df = pd.read_csv(info_file)
-                # 转换代码格式进行匹配
-                info_df['ts_code'] = info_df['ts_code'].str.replace('.HK', '.HK').str.replace('.US', '.US')
                 result_df = result_df.merge(info_df[['ts_code', 'name']], on='ts_code', how='left')
             except Exception:
                 pass
+        # 回退到成分股文件（含 name 列）
+        if 'name' not in result_df.columns or result_df['name'].isna().all():
+            members_file = DATA_DIR / MARKET_CONFIG[market]['members_file']
+            if members_file.exists():
+                try:
+                    mem_df = pd.read_csv(members_file)
+                    mem_df = mem_df.rename(columns={'code': 'ts_code'})
+                    result_df = result_df.merge(mem_df[['ts_code', 'name']], on='ts_code', how='left')
+                except Exception:
+                    pass
     else:
         # A 股从 stock_names.csv 获取
         name_file = DATA_DIR / 'stock_names.csv'
@@ -769,6 +777,8 @@ def calculate_factors_simple(market, target_date):
 
 def select_stocks(factors_df, has_turnover=True):
     """执行选股逻辑 (A 股完整因子)，支持可配置因子"""
+    if factors_df.empty:
+        return factors_df
     df = factors_df.copy()
     vol_pct = get_percentile('residual_vol', 'cn')
     turn_pct = get_percentile('turnover_5d', 'cn')
@@ -822,6 +832,8 @@ def select_stocks(factors_df, has_turnover=True):
 
 def select_stocks_us_complete(factors_df):
     """执行选股逻辑 (美股完整因子)，支持可配置因子"""
+    if factors_df.empty:
+        return factors_df
     df = factors_df.copy()
     vol_pct = get_percentile('residual_vol', 'us')
     turn_pct = get_percentile('turnover_5d', 'us')
@@ -872,6 +884,8 @@ def select_stocks_us_complete(factors_df):
 
 def select_stocks_simple(factors_df, market='hk'):
     """执行选股逻辑 (港股简化因子)，支持可配置因子"""
+    if factors_df.empty:
+        return factors_df
     df = factors_df.copy()
     vol_pct = get_percentile('volatility', market)
     mom_pct = get_percentile('momentum_5d', market)

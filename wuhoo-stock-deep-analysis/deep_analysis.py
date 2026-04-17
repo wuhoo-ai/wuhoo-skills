@@ -144,7 +144,11 @@ class AkshareFetcher:
                 records = df.head(limit).to_dict(orient='records')
                 for r in records:
                     for k, v in r.items():
-                        r[k] = safe_float(v)
+                        # 保留字符串列（"指标"、"选项"），仅转换数值列
+                        if k in ('指标', '选项'):
+                            r[k] = v
+                        else:
+                            r[k] = safe_float(v)
                 return records
             return []
         except Exception:
@@ -601,18 +605,30 @@ class DCFValuator:
         if income:
             latest_net_profit = income[0].get('净利润') or 0
 
+        # Fallback: 如果 income 为空，尝试从 indicators 中提取
+        # indicators 是转置格式（"指标"列为行名，日期为列名）
+        # akshare 使用 "归母净利润" 字段名
+        if latest_net_profit == 0 and indicators:
+            latest_net_profit = self._extract_metric_from_indicators(indicators, '归母净利润')
+            if latest_net_profit == 0:
+                latest_net_profit = self._extract_metric_from_indicators(indicators, '净利润')
+
         if cashflow:
             capex = cashflow[0].get('购建固定资产、无形资产和其他长期资产支付的现金') or 0
             op_cf = cashflow[0].get('经营活动产生的现金流量净额') or 0
             latest_fcf = op_cf - capex
 
+        # Fallback: 如果 cashflow 为空，用净利润的 80% 近似 FCF（经验值）
+        if latest_fcf == 0 and latest_net_profit > 0:
+            latest_fcf = latest_net_profit * 0.8
+
         # 如果净利润和 FCF 都为负，无法做 DCF
         if latest_net_profit <= 0 and latest_fcf <= 0:
             return {
                 "available": False,
-                "reason": "净利润和自由现金流均为负，不适合 DCF 估值",
-                "latest_net_profit": latest_net_profit / 1e4,
-                "latest_fcf": latest_fcf / 1e4
+                "reason": f"净利润({latest_net_profit/1e8:.1f}亿)和自由现金流({latest_fcf/1e8:.1f}亿)均为负或为零，不适合 DCF 估值",
+                "latest_net_profit": latest_net_profit,
+                "latest_fcf": latest_fcf
             }
 
         # 使用净利润作为基础（如果 FCF 为负但利润为正，用利润近似）
@@ -678,6 +694,24 @@ class DCFValuator:
             "current_price": self.current_price,
             "margin_of_safety": round((1 - self.current_price / bear_value) * 100, 1) if bear_value > 0 else None
         }
+
+    def _extract_metric_from_indicators(self, indicators: list, metric_name: str) -> float:
+        """从 indicators 中提取指标值（支持转置格式和列表格式）"""
+        # 格式 1: 字典列表，直接取键
+        if isinstance(indicators, list) and indicators:
+            if isinstance(indicators[0], dict):
+                for item in indicators:
+                    if metric_name in item and item.get(metric_name):
+                        return float(item[metric_name])
+                # 转置格式: 每行有 "指标" 列，其余列为各期数值
+                if '指标' in indicators[0]:
+                    for item in indicators:
+                        if item.get('指标') == metric_name:
+                            # 取第一个非日期列的值（最新一期）
+                            for key in item:
+                                if key not in ('指标', '选项') and item[key]:
+                                    return float(item[key])
+        return 0
 
     def _run_dcf(self, base_earnings, stage1_growth, stage2_growth,
                   stage1_years, terminal_growth, discount_rate) -> Dict:

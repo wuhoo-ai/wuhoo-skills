@@ -28,6 +28,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+# Python 版本检查
+if sys.version_info < (3, 9):
+    print(f"❌ Python {sys.version.split()[0]} 不支持，需要 Python 3.9+")
+    print(f"   请使用: python3.11 {__file__}")
+    sys.exit(1)
+
 # ============================================================
 # 环境变量加载
 # ============================================================

@@ -852,6 +852,9 @@ class ReportGenerator:
         self.date = datetime.now().strftime("%Y-%m-%d")
         self.time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
+    def _shares_display(self) -> float:
+        return self.dcf.get("shares_outstanding_billion", 0)
+
     def generate(self) -> str:
         """生成完整报告"""
         report = []
@@ -1442,7 +1445,7 @@ class ReportGenerator:
         report += f"**基础参数**:\n"
         report += f"- 基准盈利（净利润/FCF）: {base:,.0f} 万元\n"
         report += f"- 历史营收 CAGR: {growth:.1%}\n"
-        report += f"- 总股本: {self.dcf.get('current_price', 0):.0f} 万股\n\n"
+        report += f"- 总股本: {self._shares_display():.2f} 亿股\n\n"
 
         for name in ["悲观", "中性", "乐观"]:
             scenario = self.dcf["scenarios"][name]
@@ -1990,6 +1993,8 @@ class WorkflowBDeepHandler:
 
             valuator = DCFValuator(self.akshare_data, current_price, shares)
             self.dcf_data = valuator.calculate()
+            # 附加总股本供报告展示
+            self.dcf_data["shares_outstanding_billion"] = round(shares, 2)
             print(f"  ✅ DCF 计算完成: {'可用' if self.dcf_data.get('available') else '不可用'}")
         else:
             self.dcf_data = {"available": False, "reason": "无 akshare 财务数据"}

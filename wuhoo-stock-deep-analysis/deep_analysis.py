@@ -281,8 +281,12 @@ class DebateRunner:
     def is_available(self) -> bool:
         return self._available
 
-    def run(self, symbol: str, name: str, output_dir: Path) -> Dict:
+    def run(self, symbol: str, name: str, output_dir: Path, akshare_data: Dict = None) -> Dict:
         try:
+            import sys
+            debate_dir = Path.home() / "wuhoo-agents" / "debate"
+            if str(debate_dir) not in sys.path:
+                sys.path.insert(0, str(debate_dir))
             from run_debate import run_full_debate
             self._available = True
             result = run_full_debate(
@@ -290,9 +294,78 @@ class DebateRunner:
                 output_dir=str(output_dir),
                 use_real_data=True
             )
-            return result
-        except Exception as e:
-            return self._quick_analysis({}, {}, {})
+            return self._normalize_full_debate(result)
+        except Exception:
+            return self._quick_analysis_from_akshare(akshare_data or {})
+
+    @staticmethod
+    def _normalize_full_debate(result: Dict) -> Dict:
+        """将完整辩论结果扁平化为报告所需格式"""
+        bull_view = result.get("bull_view", {})
+        bear_view = result.get("bear_view", {})
+        trader = result.get("trader_decision", {})
+        risk = result.get("risk_approval", {})
+        final = result.get("final_action", {})
+
+        bull_points = bull_view.get("key_points", [])
+        bear_points = bear_view.get("key_points", [])
+
+        # 映射交易决策
+        decision_map = {"BUY": "看多", "SELL": "看空", "HOLD": "中性"}
+        rec = decision_map.get(trader.get("decision", "HOLD"), "中性")
+        conf = round(trader.get("confidence", 0.5) * 100)
+
+        return {
+            "method": "full",
+            "bull_points": bull_points,
+            "bear_points": bear_points,
+            "recommendation": rec,
+            "confidence": conf,
+            "trader_decision": trader.get("decision", "HOLD"),
+            "risk_approved": risk.get("approved", False),
+            "final_action": final.get("action", "hold"),
+            "final_reason": final.get("reason", ""),
+            "consensus": result.get("consensus_points", []),
+            "disagreements": result.get("disagreement_points", []),
+            "stop_loss": bull_view.get("stop_loss", 0),
+            "take_profit": bull_view.get("target_price", 0),
+            "position_suggestion": bull_view.get("position_suggestion", 0),
+        }
+
+    def _quick_analysis_from_akshare(self, akshare_data: Dict) -> Dict:
+        """从 akshare 数据提取基础指标进行简化分析"""
+        basic = akshare_data.get("basic", {})
+        indicators = akshare_data.get("indicators", [])
+        pe = safe_float(basic.get("pe_ttm", 0))
+        market_cap = safe_float(basic.get("market_cap", 0))
+
+        # 从 indicators 提取最新 ROE
+        roe = 0.0
+        if indicators:
+            for row in indicators:
+                if row.get("指标") == "加权净资产收益率(%)":
+                    # 取最新年度数据
+                    dates = [k for k in row if k not in ("指标", "选项")]
+                    if dates:
+                        roe = safe_float(row[dates[-1]]) / 100  # 百分比转小数
+                    break
+
+        # 如果 PE 为空，用市值/净利润估算
+        if not pe and market_cap > 0 and indicators:
+            for row in indicators:
+                if row.get("指标") == "归母净利润":
+                    dates = [k for k in row if k not in ("指标", "选项")]
+                    if dates:
+                        net_profit = safe_float(row[dates[-1]])
+                        if net_profit > 0:
+                            pe = market_cap / net_profit
+                    break
+
+        return self._quick_analysis(
+            {"pe": pe, "roe": roe},
+            {"rsi": 50, "trend": "sideways"},
+            {}
+        )
 
     def _quick_analysis(self, fundamental: Dict, technical: Dict, sentiment: Dict) -> Dict:
         pe = safe_float(fundamental.get('pe', 0))
@@ -2017,7 +2090,7 @@ class WorkflowBDeepHandler:
         """执行多空辩论"""
         print("\nStep 4: 执行多空辩论...")
         runner = DebateRunner()
-        self.debate_data = runner.run(self.futu_code, self.name, self.output_dir)
+        self.debate_data = runner.run(self.futu_code, self.name, self.output_dir, self.akshare_data)
         print(f"  ✅ 辩论完成: {self.debate_data.get('recommendation', '--')}")
 
     def _generate_report(self) -> str:

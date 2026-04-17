@@ -219,18 +219,15 @@ class AkshareFetcher:
 
     def _get_holders(self, code: str) -> Dict:
         result = {}
+        # 前十大股东（快速，单 API 调用）
         try:
             df = self.ak.stock_gdfx_top_10_em(symbol=code)
             if df is not None and not df.empty:
                 result["top_10"] = df.head(10).to_dict(orient='records')
         except Exception:
             pass
-        try:
-            df = self.ak.stock_zh_a_gdhs(symbol=code)
-            if df is not None and not df.empty:
-                result["holder_count_history"] = df.head(10).to_dict(orient='records')
-        except Exception:
-            pass
+        # 注意：stock_zh_a_gdhs 逐条迭代 833 个交易日，耗时 ~28 分钟
+        # 且报告生成中从未使用 holder_count_history，故已移除
         return result
 
     def _get_dividend(self, code: str) -> List[Dict]:

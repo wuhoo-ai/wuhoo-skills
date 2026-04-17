@@ -751,7 +751,9 @@ class DCFValuator:
             pv_terminal = 0
 
         total_value = pv_sum
-        value_per_share = total_value / self.shares if self.shares > 0 else 0
+        # total_value 单位是万元，shares 单位是亿股
+        # 元/股 = (total_value × 1e4) ÷ (shares × 1e8) = total_value / shares × 1e-4
+        value_per_share = (total_value / self.shares * 0.0001) if self.shares > 0 else 0
 
         return {
             "stage1_years": stage1_years,
@@ -1943,14 +1945,6 @@ class WorkflowBDeepHandler:
 
             # 估算当前价格
             current_price = 0
-            if pe and pe > 0 and self.akshare_data.get("income"):
-                latest_income = self.akshare_data["income"][0]
-                net_profit = latest_income.get("净利润") or 0
-                # 需要股本数据
-                shares_outstanding = 1  # 默认 1 亿股（需要从数据获取）
-                if self.akshare_data.get("holders", {}).get("top_10"):
-                    # 尝试从股东数据估算
-                    pass
 
             # 简化：从 akshare basic 获取信息估算
             if market_cap and market_cap > 0:
@@ -1971,24 +1965,28 @@ class WorkflowBDeepHandler:
                 # 无法获取准确价格，用粗略估算
                 current_price = 0
 
-            # 获取股本数据
+            # 获取股本数据（优先从 indicators 提取）
             total_shares = None
             indicators = self.akshare_data.get("indicators", [])
             if indicators:
                 total_shares = indicators[0].get("每股指标汇总", {}).get("总股本(万股)")
-                if not total_shares:
-                    # 尝试其他字段
-                    for ind in indicators[:3]:
-                        for key in ["基本每股收益", "每股收益"]:
-                            eps = ind.get(key)
-                            if eps and eps > 0:
-                                latest_income = self.akshare_data.get("income", [{}])[0]
-                                net_profit = latest_income.get("净利润") or 0
-                                if net_profit > 0:
-                                    total_shares = net_profit / eps / 10000  # 转为万股
-                                    break
 
-            shares = safe_float(total_shares) / 10000 if total_shares else 1  # 转为亿股
+                # 如果没有直接总股本数据，用 净资产 / 每股净资产 计算
+                if not total_shares:
+                    nav = self._extract_indicator_metric(indicators, '股东权益合计(净资产)')
+                    nav_per_share = self._extract_indicator_metric(indicators, '每股净资产')
+                    if nav > 0 and nav_per_share > 0:
+                        # nav 单位是元，nav_per_share 是元/股，结果转为亿股（/1e8）
+                        total_shares = (nav / nav_per_share) / 1e8
+
+                # 备选：用 净利润 / 每股收益 计算
+                if not total_shares:
+                    net_profit = self._extract_indicator_metric(indicators, '归母净利润')
+                    eps = self._extract_indicator_metric(indicators, '基本每股收益')
+                    if net_profit > 0 and eps > 0:
+                        total_shares = (net_profit / eps) / 1e8  # 转为亿股
+
+            shares = safe_float(total_shares) if total_shares else 1  # 单位：亿股
 
             valuator = DCFValuator(self.akshare_data, current_price, shares)
             self.dcf_data = valuator.calculate()
@@ -1996,6 +1994,19 @@ class WorkflowBDeepHandler:
         else:
             self.dcf_data = {"available": False, "reason": "无 akshare 财务数据"}
             print("  ⚠️ 无财务数据，跳过 DCF")
+
+    def _extract_indicator_metric(self, indicators: list, metric_name: str) -> float:
+        """从 indicators 中提取指标值"""
+        if isinstance(indicators, list):
+            for item in indicators:
+                if isinstance(item, dict) and item.get('指标') == metric_name:
+                    for key in item:
+                        if key not in ('指标', '选项') and item[key]:
+                            try:
+                                return float(item[key])
+                            except (ValueError, TypeError):
+                                pass
+        return 0.0
 
     def _run_debate(self):
         """执行多空辩论"""

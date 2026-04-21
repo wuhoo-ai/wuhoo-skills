@@ -317,7 +317,7 @@ def update_data(pro, force=False):
     print("\n=== 数据更新 ===")
     
     print("\n[1] 更新中证 1000 成分股...")
-    members = get_index_members(pro)
+    members = get_index_members(pro, target_date=datetime.now().strftime('%Y-%m-%d'))
     
     print("  获取股票基本信息...")
     basic = pro.stock_basic(fields='ts_code,symbol,name,list_status')
@@ -396,6 +396,7 @@ def calculate_factors_ta(pro, target_date):
     results = []
 
     print("  计算因子 (TA-Lib 专业函数)...")
+    skip_count = {'total': 0, 'len_stock': 0, 'len_merge': 0, 'min_len': 0, 'turnover': 0, 'mom5': 0, 'beta': 0, 'mom10': 0}
     for i, code in enumerate(codes):
         stock_df = data[data['ts_code'] == code].sort_values('trade_date')
 
@@ -437,7 +438,8 @@ def calculate_factors_ta(pro, target_date):
                 turnover_series = stock_turnover['turnover_rate'].values
                 turnover_5d = talib.SMA(turnover_series, timeperiod=5)[-1]
             else:
-                turnover_5d = np.nan
+                # 该股票无换手率数据，回退到成交量代理
+                turnover_5d = np.log(stock_df.tail(5)['vol'].mean() + 1)
         else:
             # 使用成交量作为代理（对数转换使其更可比）
             turnover_5d = np.log(stock_df.tail(5)['vol'].mean() + 1)
@@ -469,8 +471,8 @@ def calculate_factors_ta(pro, target_date):
             'momentum_10d': momentum_10d
         })
 
-        if (i + 1) % 200 == 0:
-            print(f"    进度：{i+1}/{len(codes)}")
+        if (i + 1) % 100 == 0:
+            print(f"    进度：{i+1}/{len(codes)} (成功：{len(results)})")
 
     result_df = pd.DataFrame(results)
 
@@ -512,8 +514,8 @@ def calculate_factors_us_complete(target_date):
 
     members_df = pd.read_csv(members_file)
     codes = members_df['code'].tolist() if 'code' in members_df.columns else members_df.iloc[:, 0].tolist()
-    # 清理代码格式 (去除 .US 后缀，yfinance 不需要)
-    codes = [c.replace('.US', '') for c in codes]
+    # 清理代码格式 (去除 US. 前缀，yfinance 不需要)
+    codes = [c.replace('US.', '') for c in codes]
     print(f"  成分股数量：{len(codes)}")
 
     # 获取 SPY 数据作为基准

@@ -73,8 +73,9 @@ SIGNAL_HOLD   = "HOLD"
 SIGNAL_ADD    = "ADD"
 SIGNAL_REDUCE = "REDUCE"
 SIGNAL_CLEAR  = "CLEAR"
+SIGNAL_SKIP   = "SKIP"  # 数据不足，跳过
 
-ALL_SIGNALS = [SIGNAL_HOLD, SIGNAL_ADD, SIGNAL_REDUCE, SIGNAL_CLEAR]
+ALL_SIGNALS = [SIGNAL_HOLD, SIGNAL_ADD, SIGNAL_REDUCE, SIGNAL_CLEAR, SIGNAL_SKIP]
 
 
 def _normalize_code_for_workflow_b(code: str) -> Tuple[str, str]:
@@ -319,6 +320,8 @@ class WorkflowDHandler:
 
         # 逐股风控检查
         risk_mgr = RiskManager()
+        # 注入 OpenD 实时持仓数据，替代本地文件读取
+        risk_mgr.set_opend_data(self.portfolio_scan)
         risk_checks = {}
         for pos in positions:
             code = pos.get("code", "")
@@ -403,6 +406,7 @@ class WorkflowDHandler:
             diag_status = diag.get("status", "error")
             wb_signal = self._extract_workflow_b_decision(diag)
             has_violation = code in violation_codes
+            data_quality = self._extract_workflow_b_data_quality(diag)
 
             signal, reason = self._determine_signal(
                 code=code,
@@ -411,6 +415,7 @@ class WorkflowDHandler:
                 diag_status=diag_status,
                 wb_signal=wb_signal,
                 has_violation=has_violation,
+                data_quality=data_quality,
             )
 
             suggestions[code] = {
@@ -725,6 +730,15 @@ class WorkflowDHandler:
         wb = diag.get("workflow_b_result", {})
         return wb.get("decision", "UNKNOWN")
 
+    def _extract_workflow_b_data_quality(self, diag: Dict) -> str:
+        """从 Workflow B 结果中提取数据质量标识"""
+        if diag.get("status") != "success":
+            return "unknown"
+        wb = diag.get("workflow_b_result", {})
+        all_data = wb.get("all_data", {})
+        dq = all_data.get("data_quality", {})
+        return dq.get("overall", "unknown")
+
     def _determine_signal(
         self,
         code: str,
@@ -733,12 +747,17 @@ class WorkflowDHandler:
         diag_status: str,
         wb_signal: str,
         has_violation: bool,
+        data_quality: str = "good",
     ) -> Tuple[str, str]:
         """
         决定调仓信号: (signal, reason)
 
-        优先级: 风控违规 > Workflow B 强烈信号 > 止损 > 正常评估
+        优先级: 数据质量 > 风控违规 > Workflow B 强烈信号 > 止损 > 正常评估
         """
+        # 0. 数据质量检查优先 — 降级数据不可用于交易决策
+        if data_quality == "degraded":
+            return (SIGNAL_SKIP, "基本面数据降级（AkShare 超时/Tushare 无数据），无法可靠评估，建议跳过")
+
         # 1. 风控违规优先
         if has_violation:
             return (SIGNAL_REDUCE, "触发风控限制，建议减仓")

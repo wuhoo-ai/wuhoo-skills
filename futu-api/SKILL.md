@@ -1,6 +1,8 @@
 ---
-name: futuapi
+name: wuhoo-futuapi
 description: 富途 OpenAPI 交易与行情助手。查询股票行情、K线、报价、快照、买卖盘、逐笔成交、分时数据；解析期权简写代码、查询期权链、期权到期日；执行买入/卖出/下单/撤单/改单；查询持仓/资金/账户/订单；订阅实时推送；API 接口速查。用户提到行情、报价、价格、K线、快照、买卖盘、摆盘、成交、分时、买入、卖出、下单、撤单、交易、持仓、资金、账户、订单、委托、futu、API、选股、板块、期权、期权链、期权代码、行权价、到期日、Call、Put、看涨、看跌、认购、认沽 时自动使用。
+tags: ["wuhoo"]
+category: wuhoo
 allowed-tools: Bash Read Write Edit
 ---
 
@@ -30,26 +32,88 @@ from futu import *
 
 ## 启动 OpenD
 
-当用户说"启动 OpenD"、"打开 OpenD"、"运行 OpenD"时，**先检测本地是否已安装 OpenD**，再决定下一步操作。
+当用户说"启动 OpenD"、"打开 OpenD"、"运行 OpenD"、"OpenD 挂了"、"OpenD 连不上"时，使用以下运维流程。
 
-### 检测是否已安装
+### OpenD 安装位置
 
-**Windows**：
-```powershell
-Get-ChildItem -Path "C:\Users\$env:USERNAME\Desktop","C:\Program Files","C:\Program Files (x86)","D:\" -Recurse -Filter "*OpenD-GUI*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-```
+- **二进制**: `~/wuhoo-workspace/tools/opend/Futu_OpenD_10.3.6308_Centos7/Futu_OpenD_10.3.6308_Centos7/FutuOpenD`
+- **启动脚本**: `~/wuhoo-workspace/scripts/start_opend.sh`
+- **日志目录**: `~/wuhoo-workspace/tools/opend/logs/`
+- **监听端口**: `127.0.0.1:11111`（API）、`127.0.0.1:22222`（WebSocket）
 
-**MacOS**：
+### 命令行启动（推荐）
+
+OpenD 使用命令行参数启动，**不依赖 XML 配置文件**。凭证通过环境变量注入：
+
 ```bash
-ls /Applications/*OpenD-GUI*.app 2>/dev/null || mdfind "kMDItemFSName == '*OpenD-GUI*'" 2>/dev/null | head -1
+# 启动
+bash ~/wuhoo-workspace/scripts/start_opend.sh start
+
+# 重启
+bash ~/wuhoo-workspace/scripts/start_opend.sh restart
+
+# 停止
+bash ~/wuhoo-workspace/scripts/start_opend.sh stop
+
+# 状态
+bash ~/wuhoo-workspace/scripts/start_opend.sh status
 ```
 
-### 判断逻辑
+启动脚本自动执行：
+1. 从 `~/.hermes/.env` 加载 `FUTU_USERNAME`、`FUTU_LOGIN_PASSWORD`、`FUTU_TRADING_PASSWORD`
+2. 计算登录密码的 MD5
+3. 使用命令行参数启动 OpenD（模拟盘模式）
+4. 等待端口 11111 监听就绪
 
-- **已安装（找到可执行文件）**：直接启动，不需要运行安装流程
-  - Windows：`Start-Process "找到的exe路径"`
-  - MacOS：`open "/Applications/找到的.app"`
-- **未安装（未找到）**：提示用户当前未检测到 OpenD，调用 `/install-opend` 进入安装流程
+### 命令行参数详解
+
+```bash
+./FutuOpenD \
+    -login_account=15088682042 \        # 富途账号（手机号）
+    -login_pwd_md5=<md5> \              # 登录密码的 MD5 哈希
+    -api_ip=127.0.0.1 \                 # API 监听 IP
+    -api_port=11111 \                   # API 监听端口
+    -simulate_trade=enable \            # 启用模拟交易
+    -lang=chs \                         # 语言（中文）
+    -log_level=info \                   # 日志级别：no,debug,info,warning,error,fatal
+    -log_path=<path> \                  # 日志目录
+    -websocket_ip=127.0.0.1 \           # WebSocket IP
+    -websocket_port=22222 \             # WebSocket 端口
+    -remember=0 \                       # 不记住登录状态
+    -no_monitor=1                       # 不启动看门狗
+```
+
+### 常见问题排查
+
+#### 1. OpenD 启动失败，日志显示"登录失败,账号名与密码不匹配"
+
+- **原因**: `~/.hermes/.env` 中 `FUTU_LOGIN_PASSWORD` 的值不正确
+- **解决**: 检查 `.env` 文件中密码是否为真实值（不是 `***` 占位符），更新后重启
+
+#### 2. OpenD 进程存在但端口未监听
+
+- **原因**: OpenD 卡在登录验证阶段（可能剩余尝试次数耗尽）
+- **解决**: `kill` 进程，修正密码后重新启动
+
+#### 3. futu-api 连接被拒绝
+
+- 检查 OpenD 是否运行：`ss -tlnp | grep 11111`
+- 检查日志：`tail -20 ~/wuhoo-workspace/tools/opend/logs/stdout.log`
+- 查看 ftlog：`ls -lt ~/wuhoo-workspace/tools/opend/logs/Log/*.ftlog | head -3`
+
+### 旧版 GUI 启动方式（备用）
+
+**Windows**:
+```powershell
+Start-Process "C:\Program Files\Futu\OpenD\FutuOpenD.exe"
+```
+
+**MacOS**:
+```bash
+open "/Applications/FutuOpenD-GUI.app"
+```
+
+> 注意：GUI 方式需要手动输入密码，不适合自动化场景。优先使用命令行模式。
 
 ## 股票代码格式
 
@@ -190,7 +254,7 @@ ret, data = trd_ctx.order_list_query(
 ## 脚本目录
 
 ```
-skills/futuapi/
+skills/wuhoo-futuapi/
 ├── SKILL.md
 └── scripts/
     ├── common.py                     # 公共工具与配置
@@ -227,24 +291,24 @@ skills/futuapi/
 
 ### 脚本路径查找规则
 
-运行脚本前，**必须先确认脚本文件是否存在**。如果默认路径 `skills/futuapi/scripts/` 下找不到脚本，则自动到 skill 的 base directory 下查找。
+运行脚本前，**必须先确认脚本文件是否存在**。如果默认路径 `skills/wuhoo-futuapi/scripts/` 下找不到脚本，则自动到 skill 的 base directory 下查找。
 
 **执行流程**：
 
-1. 先检查 `skills/futuapi/scripts/{category}/{script}.py` 是否存在
+1. 先检查 `skills/wuhoo-futuapi/scripts/{category}/{script}.py` 是否存在
 2. 如果不存在，改用 `{SKILL_BASE_DIR}/scripts/{category}/{script}.py`（其中 `{SKILL_BASE_DIR}` 为 skill 加载时系统提示的 "Base directory for this skill" 路径）
 
 **示例**：假设要运行 `get_accounts.py`，skill base directory 为 `/home/user/.claude/skills/futuapi`：
 
 ```bash
 # 先检查默认路径
-ls skills/futuapi/scripts/trade/get_accounts.py 2>/dev/null
+ls skills/wuhoo-futuapi/scripts/trade/get_accounts.py 2>/dev/null
 
 # 如果不存在，则使用 skill base directory
-ls /home/user/.claude/skills/futuapi/scripts/trade/get_accounts.py 2>/dev/null
+ls /home/user/.claude/skills/wuhoo-futuapi/scripts/trade/get_accounts.py 2>/dev/null
 ```
 
-找到脚本后，用该路径执行 `python {找到的路径} [参数...]`。后续命令示例均使用默认路径 `skills/futuapi/scripts/`，实际执行时按此规则查找。
+找到脚本后，用该路径执行 `python {找到的路径} [参数...]`。后续命令示例均使用默认路径 `skills/wuhoo-futuapi/scripts/`，实际执行时按此规则查找。
 
 ---
 
@@ -253,17 +317,17 @@ ls /home/user/.claude/skills/futuapi/scripts/trade/get_accounts.py 2>/dev/null
 ### 获取市场快照
 当用户问 "报价"、"价格"、"行情" 时：
 ```bash
-python skills/futuapi/scripts/quote/get_snapshot.py US.AAPL HK.00700 [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_snapshot.py US.AAPL HK.00700 [--json]
 ```
 
 ### 获取 K 线
 当用户问 "K线"、"蜡烛图"、"历史走势" 时：
 ```bash
 # 实时 K 线（最近 N 根）
-python skills/futuapi/scripts/quote/get_kline.py HK.00700 --ktype 1d --num 10
+python skills/wuhoo-futuapi/scripts/quote/get_kline.py HK.00700 --ktype 1d --num 10
 
 # 历史 K 线（日期范围）
-python skills/futuapi/scripts/quote/get_kline.py HK.00700 --ktype 1d --start 2025-01-01 --end 2025-12-31
+python skills/wuhoo-futuapi/scripts/quote/get_kline.py HK.00700 --ktype 1d --start 2025-01-01 --end 2025-12-31
 ```
 - `--ktype`: 1m, 3m, 5m, 15m, 30m, 60m, 1d, 1w, 1M, 1Q, 1Y
 - `--rehab`: none(不复权), forward(前复权, 默认), backward(后复权)
@@ -273,43 +337,43 @@ python skills/futuapi/scripts/quote/get_kline.py HK.00700 --ktype 1d --start 202
 ### 获取买卖盘
 当用户问 "买卖盘"、"摆盘"、"depth" 时：
 ```bash
-python skills/futuapi/scripts/quote/get_orderbook.py HK.00700 --num 10 [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_orderbook.py HK.00700 --num 10 [--json]
 ```
 
 ### 获取逐笔成交
 当用户问 "逐笔"、"成交明细"、"ticker" 时：
 ```bash
-python skills/futuapi/scripts/quote/get_ticker.py HK.00700 --num 20 [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_ticker.py HK.00700 --num 20 [--json]
 ```
 
 ### 获取分时数据
 当用户问 "分时"、"intraday" 时：
 ```bash
-python skills/futuapi/scripts/quote/get_rt_data.py HK.00700 [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_rt_data.py HK.00700 [--json]
 ```
 
 ### 获取市场状态
 当用户问 "市场状态"、"开盘了吗" 时：
 ```bash
-python skills/futuapi/scripts/quote/get_market_state.py HK.00700 US.AAPL [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_market_state.py HK.00700 US.AAPL [--json]
 ```
 
 ### 获取资金流向
 当用户问 "资金流向"、"资金流入流出" 时：
 ```bash
-python skills/futuapi/scripts/quote/get_capital_flow.py HK.00700 [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_capital_flow.py HK.00700 [--json]
 ```
 
 ### 获取资金分布
 当用户问 "资金分布"、"大单小单"、"主力资金" 时：
 ```bash
-python skills/futuapi/scripts/quote/get_capital_distribution.py HK.00700 [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_capital_distribution.py HK.00700 [--json]
 ```
 
 ### 获取板块列表
 当用户问 "板块列表"、"概念板块"、"行业板块" 时：
 ```bash
-python skills/futuapi/scripts/quote/get_plate_list.py --market HK --type CONCEPT [--keyword 科技] [--limit 50] [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_plate_list.py --market HK --type CONCEPT [--keyword 科技] [--limit 50] [--json]
 ```
 - `--market`: HK, US, SH, SZ
 - `--type`: ALL, INDUSTRY, REGION, CONCEPT
@@ -318,9 +382,9 @@ python skills/futuapi/scripts/quote/get_plate_list.py --market HK --type CONCEPT
 ### 获取板块成分股 / 指数成分股
 当用户问 "板块股票"、"成分股"、"恒指成分股"、"指数成分股" 时：
 ```bash
-python skills/futuapi/scripts/quote/get_plate_stock.py hsi [--limit 30] [--json]
-python skills/futuapi/scripts/quote/get_plate_stock.py HK.BK1910 [--json]
-python skills/futuapi/scripts/quote/get_plate_stock.py --list-aliases  # 列出所有别名
+python skills/wuhoo-futuapi/scripts/quote/get_plate_stock.py hsi [--limit 30] [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_plate_stock.py HK.BK1910 [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_plate_stock.py --list-aliases  # 列出所有别名
 ```
 - 支持查询板块成分股和**指数成分股**（如恒生指数、恒生科技指数等）
 - 内置别名：`hsi`(恒指), `hstech`(恒生科技), `hk_ai`(AI), `hk_chip`(芯片), `hk_ev`(新能源车), `us_ai`(美股AI), `us_chip`(半导体), `us_chinese`(中概股) 等
@@ -334,7 +398,7 @@ python skills/futuapi/scripts/quote/get_plate_stock.py --list-aliases  # 列出�
 ### 获取股票信息
 当用户问 "股票信息"、"基本信息" 时：
 ```bash
-python skills/futuapi/scripts/quote/get_stock_info.py US.AAPL,HK.00700 [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_stock_info.py US.AAPL,HK.00700 [--json]
 ```
 - 底层使用 `get_market_snapshot`，返回包含实时行情的快照数据（含价格、市值、市盈率等）
 - 每次最多 400 个标的
@@ -342,7 +406,7 @@ python skills/futuapi/scripts/quote/get_stock_info.py US.AAPL,HK.00700 [--json]
 ### 条件选股
 当用户问 "选股"、"筛选"、"stock filter" 时：
 ```bash
-python skills/futuapi/scripts/quote/get_stock_filter.py --market HK [条件] [--sort 字段] [--limit 20] [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_stock_filter.py --market HK [条件] [--sort 字段] [--limit 20] [--json]
 ```
 条件参数：
 - 价格：`--min-price`, `--max-price`
@@ -358,17 +422,17 @@ python skills/futuapi/scripts/quote/get_stock_filter.py --market HK [条件] [--
 示例：
 ```bash
 # 港股市值前20
-python skills/futuapi/scripts/quote/get_stock_filter.py --market HK --sort market_val --limit 20
+python skills/wuhoo-futuapi/scripts/quote/get_stock_filter.py --market HK --sort market_val --limit 20
 # PE 在 10-30 之间
-python skills/futuapi/scripts/quote/get_stock_filter.py --market US --min-pe 10 --max-pe 30
+python skills/wuhoo-futuapi/scripts/quote/get_stock_filter.py --market US --min-pe 10 --max-pe 30
 # 涨幅前10
-python skills/futuapi/scripts/quote/get_stock_filter.py --market HK --sort change_rate --limit 10
+python skills/wuhoo-futuapi/scripts/quote/get_stock_filter.py --market HK --sort change_rate --limit 10
 ```
 
 ### 获取股票所属板块
 当用户问 "所属板块"、"属于哪些板块" 时：
 ```bash
-python skills/futuapi/scripts/quote/get_owner_plate.py HK.00700 US.AAPL [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_owner_plate.py HK.00700 US.AAPL [--json]
 ```
 
 ### 解析期权简写代码
@@ -376,7 +440,7 @@ python skills/futuapi/scripts/quote/get_owner_plate.py HK.00700 US.AAPL [--json]
 当用户提供期权描述时（如 `JPM 260320 267.50C`、`腾讯 260320 420.00 购`），**必须先由你解析出正股代码、到期日、行权价、期权类型，再调用脚本从期权链中精准匹配**。
 
 ```bash
-python skills/futuapi/scripts/quote/resolve_option_code.py --underlying US.JPM --expiry 2026-03-20 --strike 267.50 --type CALL [--json]
+python skills/wuhoo-futuapi/scripts/quote/resolve_option_code.py --underlying US.JPM --expiry 2026-03-20 --strike 267.50 --type CALL [--json]
 ```
 
 #### 第一步：你来解析用户输入（脚本不做这一步）
@@ -410,7 +474,7 @@ python skills/futuapi/scripts/quote/resolve_option_code.py --underlying US.JPM -
 
 ```bash
 # 脚本通过期权链接口精准查找，返回富途期权代码
-python skills/futuapi/scripts/quote/resolve_option_code.py --underlying US.JPM --expiry 2026-03-20 --strike 267.50 --type CALL --json
+python skills/wuhoo-futuapi/scripts/quote/resolve_option_code.py --underlying US.JPM --expiry 2026-03-20 --strike 267.50 --type CALL --json
 ```
 
 脚本会自动：
@@ -470,13 +534,13 @@ python skills/futuapi/scripts/quote/resolve_option_code.py --underlying US.JPM -
 ### 获取期权到期日
 当用户问"期权到期日"、"有哪些到期日" 时：
 ```bash
-python skills/futuapi/scripts/quote/get_option_expiration_date.py US.AAPL [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_option_expiration_date.py US.AAPL [--json]
 ```
 
 ### 获取期权链
 当用户问"期权链"、"有哪些期权" 时：
 ```bash
-python skills/futuapi/scripts/quote/get_option_chain.py US.AAPL [--start 2026-03-01] [--end 2026-03-31] [--json]
+python skills/wuhoo-futuapi/scripts/quote/get_option_chain.py US.AAPL [--start 2026-03-01] [--end 2026-03-31] [--json]
 ```
 
 ---
@@ -486,9 +550,11 @@ python skills/futuapi/scripts/quote/get_option_chain.py US.AAPL [--start 2026-03
 ### 获取账户列表
 当用户问 "我的账户"、"账户列表" 时：
 ```bash
-python skills/futuapi/scripts/trade/get_accounts.py [--json]
+python skills/wuhoo-futuapi/scripts/trade/get_accounts.py [--json]
 ```
 脚本使用 `FUTUSECURITIES` 券商标识，按 `acc_id` 去重合并，确保不同券商下的实盘账户都能被获取到。
+
+> **重要：get_acc_list() 是环境无关的。** 无论传入什么 TrdEnv（REAL/SIMULATE）或 TrdMarket（HK/US/CN），返回的账户列表完全相同。OpenD 将服务端所有账户（模拟+实盘）一次性返回，不做市场或环境过滤。市场权限过滤应在获取账户后按 `trdmarket_auth` 字段自行筛选。
 
 > **提示**：实盘账户的 `uni_card_num` 后四位等于 app/桌面端上显示的账号数字。展示实盘账户信息时应**优先显示 `uni_card_num`**（而非 `acc_id`），因为用户在 app/桌面端看到的就是这个编号，更容易关联识别。模拟账户无需关注此字段。
 
@@ -497,7 +563,7 @@ JSON 输出包含 `trdmarket_auth` 字段，表示该账户拥有交易权限的
 ### 获取持仓与资金
 当用户问 "持仓"、"资金"、"我的股票" 时：
 ```bash
-python skills/futuapi/scripts/trade/get_portfolio.py [--market HK] [--trd-env SIMULATE] [--acc-id 12345] [--security-firm FUTUSECURITIES] [--json]
+python skills/wuhoo-futuapi/scripts/trade/get_portfolio.py [--market HK] [--trd-env SIMULATE] [--acc-id 12345] [--security-firm FUTUSECURITIES] [--json]
 ```
 - `--market`: US, HK, HKCC, CN, SG
 - `--trd-env`: REAL, SIMULATE（默认 SIMULATE）
@@ -573,7 +639,7 @@ python skills/futuapi/scripts/trade/get_portfolio.py [--market HK] [--trd-env SI
 ### 下单
 当用户问 "买入"、"卖出"、"下单" 时：
 ```bash
-python skills/futuapi/scripts/trade/place_order.py --code US.AAPL --side BUY --quantity 10 --price 150.0 [--order-type NORMAL] [--trd-env SIMULATE] [--confirmed] [--security-firm FUTUSECURITIES] [--json]
+python skills/wuhoo-futuapi/scripts/trade/place_order.py --code US.AAPL --side BUY --quantity 10 --price 150.0 [--order-type NORMAL] [--trd-env SIMULATE] [--confirmed] [--security-firm FUTUSECURITIES] [--json]
 ```
 - `--code`: 股票代码（必填），脚本自动从前缀推断市场，无需指定 `--market`
 - `--side`: BUY/SELL（必填）
@@ -587,7 +653,7 @@ python skills/futuapi/scripts/trade/place_order.py --code US.AAPL --side BUY --q
 
 模拟交易（`--trd-env SIMULATE`，默认）直接执行下单命令即可：
 ```bash
-python skills/futuapi/scripts/trade/place_order.py --code {code} --side {side} --quantity {qty} --price {price} --trd-env SIMULATE
+python skills/wuhoo-futuapi/scripts/trade/place_order.py --code {code} --side {side} --quantity {qty} --price {price} --trd-env SIMULATE
 ```
 
 #### 实盘下单流程
@@ -621,7 +687,7 @@ python skills/futuapi/scripts/trade/place_order.py --code {code} --side {side} -
 
 3. **执行下单命令**，带上 `--acc-id`：
    ```bash
-   python skills/futuapi/scripts/trade/place_order.py --code {code} --side {side} --quantity {qty} --price {price} --trd-env REAL --acc-id {acc_id} --security-firm {firm}
+   python skills/wuhoo-futuapi/scripts/trade/place_order.py --code {code} --side {side} --quantity {qty} --price {price} --trd-env REAL --acc-id {acc_id} --security-firm {firm}
    ```
 
    > **注意**：如果 API 返回 `unlock needed` 或类似解锁错误，提示用户需先在 **OpenD GUI 界面手动解锁交易密码**（菜单或界面中的"解锁交易"按钮），解锁后重新执行下单。
@@ -629,7 +695,7 @@ python skills/futuapi/scripts/trade/place_order.py --code {code} --side {side} -
 ### 改单
 当用户问 "改单"、"修改订单"、"修改价格"、"修改数量" 时：
 ```bash
-python skills/futuapi/scripts/trade/modify_order.py --order-id 12345678 [--price 410] [--quantity 200] [--market HK] [--trd-env SIMULATE] [--acc-id 12345] [--security-firm FUTUSECURITIES] [--json]
+python skills/wuhoo-futuapi/scripts/trade/modify_order.py --order-id 12345678 [--price 410] [--quantity 200] [--market HK] [--trd-env SIMULATE] [--acc-id 12345] [--security-firm FUTUSECURITIES] [--json]
 ```
 - `--order-id`: 订单 ID（必填）
 - `--price`: 修改后的价格（可选，不传则保持原价）
@@ -642,20 +708,20 @@ python skills/futuapi/scripts/trade/modify_order.py --order-id 12345678 [--price
 ### 撤单
 当用户问 "撤单"、"取消订单" 时：
 ```bash
-python skills/futuapi/scripts/trade/cancel_order.py --order-id 12345678 [--acc-id 12345] [--market HK] [--trd-env SIMULATE] [--security-firm FUTUSECURITIES] [--json]
+python skills/wuhoo-futuapi/scripts/trade/cancel_order.py --order-id 12345678 [--acc-id 12345] [--market HK] [--trd-env SIMULATE] [--security-firm FUTUSECURITIES] [--json]
 ```
 - 用户未给出订单 ID 时，先用 `get_orders.py` 查询
 
 ### 查询今日订单
 当用户问 "订单"、"我的委托" 时：
 ```bash
-python skills/futuapi/scripts/trade/get_orders.py [--market HK] [--trd-env SIMULATE] [--acc-id 12345] [--security-firm FUTUSECURITIES] [--json]
+python skills/wuhoo-futuapi/scripts/trade/get_orders.py [--market HK] [--trd-env SIMULATE] [--acc-id 12345] [--security-firm FUTUSECURITIES] [--json]
 ```
 
 ### 查询历史订单
 当用户问 "历史订单"、"过去的委托" 时：
 ```bash
-python skills/futuapi/scripts/trade/get_history_orders.py [--acc-id 12345] [--market HK] [--trd-env SIMULATE] [--start 2026-01-01] [--end 2026-03-01] [--code US.AAPL] [--status FILLED_ALL CANCELLED_ALL] [--limit 200] [--security-firm FUTUSECURITIES] [--json]
+python skills/wuhoo-futuapi/scripts/trade/get_history_orders.py [--acc-id 12345] [--market HK] [--trd-env SIMULATE] [--start 2026-01-01] [--end 2026-03-01] [--code US.AAPL] [--status FILLED_ALL CANCELLED_ALL] [--limit 200] [--security-firm FUTUSECURITIES] [--json]
 ```
 
 ---
@@ -663,6 +729,8 @@ python skills/futuapi/scripts/trade/get_history_orders.py [--acc-id 12345] [--ma
 ## 期货交易命令
 
 期货交易必须使用 **`OpenFutureTradeContext`**（而非证券交易的 `OpenSecTradeContext`），现有交易脚本（`place_order.py` 等）使用的是 `OpenSecTradeContext`，**不适用于期货**。期货交易需直接生成 Python 代码执行。
+
+> 📁 **参考文件**：`references/futures-contract-catalog.md` — 全市场 300+ 主力合约完整目录（代码/lot_size/类别/保证金），含 Phase 1 选品池
 
 ### 期货 vs 证券的关键区别
 
@@ -823,16 +891,100 @@ ret, data = trd_ctx.modify_order(
 trd_ctx.close()
 ```
 
-### 期货合约信息查询
+### 期货合约元数据查询（关键陷阱）
+
+**⚠️ `get_future_info` 需要行情权限**（需在富途 App 购买期货行情卡），未购买时返回「行情权限不足」。
+
+**替代方案**：用 `get_stock_basicinfo(market, SecurityType.FUTURE)` 获取合约信息（无需行情权限）：
 
 ```python
 from futu import *
 quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
-ret, data = quote_ctx.get_future_info(['SG.CNmain', 'SG.NKmain'])
-if ret == RET_OK:
-    print(data)  # 包含合约乘数、最小变动价位、交易时间等
+
+# ✅ 正确：各市场期货合约列表（无需行情权限）
+for market in [Market.HK, Market.US, Market.SG, Market.JP]:
+    ret, data = quote_ctx.get_stock_basicinfo(market, SecurityType.FUTURE)
+    if ret == RET_OK:
+        main = data[data['main_contract'] == True]
+        print(f'{market}: {len(data)} total, {len(main)} main contracts')
+
 quote_ctx.close()
 ```
+
+可用字段：`code`, `name`, `lot_size`（合约乘数），`main_contract`（是否主力合约）
+
+**合约到期月提取**（因 `get_future_info` 不可用）：
+```python
+# 从名称提取到期月，如 "恒指期货主连 (2605)" → "2026-05"
+import re
+name = "恒指期货主连 (2605)"
+m = re.search(r'\((\d{2})(\d{2})\)', name)
+if m:
+    expiry = f"20{m.group(1)}-{m.group(2)}"  # "2026-05"
+```
+
+### 期货保证金查询（关键发现）
+
+**❌ `accinfo_query.initial_margin` 对期货模拟账户返回 N/A**（与证券模拟账户同样的已知问题）。不能用 `accinfo_query` 获取账户级保证金。
+
+**✅ 正确方案：`acctradinginfo_query` 逐品种查询**（2026-05-08 实测验证）：
+
+```python
+from futu import *
+
+trd = OpenFutureTradeContext(host='127.0.0.1', port=11111)
+
+# 查询单品种保证金
+ret, data = trd.acctradinginfo_query(
+    order_type=OrderType.NORMAL,
+    code='US.MESmain',    # 微型标普500
+    price=5865.0,         # 当前价格
+    trd_env=TrdEnv.SIMULATE,
+    acc_id=18767290
+)
+if ret == RET_OK:
+    long_im = data['long_required_im'].iloc[0]   # $2408.0
+    short_im = data['short_required_im'].iloc[0] # $2271.0
+    print(f'做多保证金: {long_im}, 做空保证金: {short_im}')
+
+trd.close()
+```
+
+**实测保证金参考（US 期货模拟账户 18767290）**：
+
+| 合约 | lot_size | 做多保证金(USD) | 做空保证金(USD) |
+|------|:--------:|:-------------:|:-------------:|
+| US.MESmain (微标普) | 5 | $2,408 | $2,271 |
+| US.ESmain (标普E-mini) | 50 | $24,078 | $22,714 |
+
+### 已验证期货模拟账户（2026-05-08）
+
+```python
+trd = OpenFutureTradeContext(host='127.0.0.1', port=11111)
+ret, data = trd.get_acc_list()  # 无需 filter_trdmarket，直接返回全部
+```
+
+| acc_id | trdmarket_auth | acc_type | 状态 |
+|--------|---------------|----------|:----:|
+| 18767297 | [FUTURES_SIMULATE_HK] | MARGIN | ACTIVE |
+| 18767290 | [FUTURES_SIMULATE_US] | MARGIN | ACTIVE |
+| 18767298 | [FUTURES_SIMULATE_SG] | MARGIN | ACTIVE |
+| 18767291 | [FUTURES_SIMULATE_JP] | MARGIN | ACTIVE |
+
+> **注意**：与证券 `OpenSecTradeContext` 不同，`OpenFutureTradeContext.get_acc_list()` 无需 `filter_trdmarket` 即可返回全部 4 个市场账户。
+
+### 期货合约常见陷阱
+
+| 陷阱 | 详情 | 解决 |
+|------|------|------|
+| MYMmain lot_size=0 | 微型道指 `US.MYMmain` 不可交易 | 用 `US.YMmain`（道指E-mini, lot_size=5） |
+| CNmain 市场归属 | A50 是 `SG.CNmain`（SG 市场），非 HK | 正确代码 SG.CNmain, lot_size=1 |
+| get_future_info 权限 | 需要行情卡，未购买时失败 | 用 get_stock_basicinfo 替代 |
+| accinfo_query margin N/A | 期货模拟账户 initial_margin 返回 N/A | 用 acctradinginfo_query 逐品种查询 |
+| 单笔下单限 1000 手 | `place_order qty>1000` 报错 | 拆分为多笔（如 1500→1000+500） |
+| US 期货历史 K 线 | `request_history_kline` 需行情权限 | 用 yfinance 替代（ES=F, NQ=F 等） |
+
+> **完整期货合约目录**：见 `references/futures-contract-catalog.md` — 全市场 300+ 主力合约的代码/lot_size/类别
 
 ---
 
@@ -841,7 +993,7 @@ quote_ctx.close()
 ### 订阅行情
 当用户需要订阅实时数据时：
 ```bash
-python skills/futuapi/scripts/subscribe/subscribe.py HK.00700 --types QUOTE ORDER_BOOK [--json]
+python skills/wuhoo-futuapi/scripts/subscribe/subscribe.py HK.00700 --types QUOTE ORDER_BOOK [--json]
 ```
 - `--types`: 订阅类型列表（必填）
 - `--no-first-push`: 不立即推送缓存数据
@@ -853,17 +1005,17 @@ python skills/futuapi/scripts/subscribe/subscribe.py HK.00700 --types QUOTE ORDE
 ### 取消订阅
 ```bash
 # 取消指定订阅
-python skills/futuapi/scripts/subscribe/unsubscribe.py HK.00700 --types QUOTE ORDER_BOOK [--json]
+python skills/wuhoo-futuapi/scripts/subscribe/unsubscribe.py HK.00700 --types QUOTE ORDER_BOOK [--json]
 
 # 取消所有订阅
-python skills/futuapi/scripts/subscribe/unsubscribe.py --all [--json]
+python skills/wuhoo-futuapi/scripts/subscribe/unsubscribe.py --all [--json]
 ```
 - **注意**：订阅后至少 1 分钟才能取消
 
 ### 查询订阅状态
 当用户问 "已订阅什么"、"订阅状态" 时：
 ```bash
-python skills/futuapi/scripts/subscribe/query_subscription.py [--current] [--json]
+python skills/wuhoo-futuapi/scripts/subscribe/query_subscription.py [--current] [--json]
 ```
 - `--current`: 只查询当前连接（默认查询所有连接）
 
@@ -874,7 +1026,7 @@ python skills/futuapi/scripts/subscribe/query_subscription.py [--current] [--jso
 ### 接收报价推送
 当用户需要实时报价推送时：
 ```bash
-python skills/futuapi/scripts/subscribe/push_quote.py HK.00700 US.AAPL --duration 60 [--json]
+python skills/wuhoo-futuapi/scripts/subscribe/push_quote.py HK.00700 US.AAPL --duration 60 [--json]
 ```
 - `--duration`: 持续接收时间（秒，默认 60）
 - 按 Ctrl+C 可提前停止
@@ -882,7 +1034,7 @@ python skills/futuapi/scripts/subscribe/push_quote.py HK.00700 US.AAPL --duratio
 ### 接收 K 线推送
 当用户需要实时 K 线推送时：
 ```bash
-python skills/futuapi/scripts/subscribe/push_kline.py HK.00700 --ktype K_1M --duration 300 [--json]
+python skills/wuhoo-futuapi/scripts/subscribe/push_kline.py HK.00700 --ktype K_1M --duration 300 [--json]
 ```
 - `--ktype`: K_1M, K_5M, K_15M, K_30M, K_60M, K_DAY, K_WEEK, K_MON（默认: K_1M）
 - `--duration`: 持续接收时间（秒，默认 300）
@@ -1186,6 +1338,18 @@ SysNotifyHandlerBase  -- 系统通知回调
 - **调用 `request_history_kline` 前**，应先通过 `get_history_kl_quota(get_detail=True)` 检查剩余额度是否充足
 - **批量获取多只股票 K 线时**，先检查额度，确认剩余额度 >= 需要请求的股票数量后再执行
 
+**常见额度错误信息**：
+- `历史K线额度不足，请求失败。额度会滚动释放，直至30天后全部释放。` — 当日额度耗尽，需等待
+- `获取历史K线频率太高，请求失败，每30秒最多60次。` — 请求过快，需加延迟
+
+**额度规则详解**：
+- 每调用一次 `request_history_kline` 消耗 1 个额度，**与日期范围无关**（1 天和 25 个月消耗相同额度）
+- 开户用户 30 天内 100 次额度，实际每日约 60 次（因滚动释放机制）
+- 30 天后滚动释放：第 1 天使用的额度在第 31 天释放
+- 30 天内重复请求同一只股票不重复消耗
+
+**⚠️ 禁止用 `request_history_kline` 批量下载历史日线**。替代方案：港股用 yfinance (`0700.HK` 格式，无配额限制)，美股用 yfinance。
+
 ### 额度等级
 
 订阅额度和历史 K 线额度根据用户资产和交易活跃度分级：
@@ -1236,6 +1400,62 @@ quote_ctx.close()
 ```
 
 ## 已知问题
+
+### OpenSecTradeContext 构造函数无 env 参数
+
+**现象**：使用 `OpenSecTradeContext(env=TrdEnv.SIMULATE, ...)` 会报 `TypeError: got an unexpected keyword argument 'env'`。
+
+**正确签名**：
+```python
+OpenSecTradeContext(filter_trdmarket=TrdMarket.NONE, host='127.0.0.1', port=11111, security_firm=SecurityFirm.FUTUSECURITIES)
+```
+- 无 `env` 参数，交易环境在方法调用时指定（如 `position_list_query(trd_env=TrdEnv.SIMULATE, ...)`）
+- 使用 `filter_trdmarket=TrdMarket.NONE` 可查询所有市场账户
+
+### ⚠️ `filter_trdmarket` 参数是必须的！账户查询关键陷阱（2026-05-06 实锤）
+
+**结论**：CN/US 模拟账户**并未消失**。`get_acc_list()` 默认只返回 HK 市场账户，必须用 `filter_trdmarket` 按市场分别查询！
+
+**错误用法**（只返回 HK 账户）：
+```python
+trd = OpenSecTradeContext(host='127.0.0.1', port=11111, security_firm=SecurityFirm.FUTUSECURITIES)
+ret, data = trd.get_acc_list()  # ❌ 只返回 HK 模拟账户
+```
+
+**正确用法**（按市场分别查询）：
+```python
+# CN 账户
+trd_cn = OpenSecTradeContext(filter_trdmarket=TrdMarket.CN, host='127.0.0.1', port=11111,
+                              security_firm=SecurityFirm.FUTUSECURITIES)
+ret, data = trd_cn.get_acc_list()  # ✅ 返回 18767295 (CN CASH)
+
+# US 账户
+trd_us = OpenSecTradeContext(filter_trdmarket=TrdMarket.US, host='127.0.0.1', port=11111,
+                              security_firm=SecurityFirm.FUTUSECURITIES)
+ret, data = trd_us.get_acc_list()  # ✅ 返回 18767293 (US MARGIN)
+```
+
+**已验证的完整模拟账户列表**（2026-05-06 实测）：
+| acc_id | filter_trdmarket | sim_acc_type | trdmarket_auth | 状态 |
+|--------|:---:|------|------|------|
+| 18767294 | HK | STOCK | [HK] | ACTIVE |
+| 18767296 | HK | OPTION | [HK] | ACTIVE |
+| **18767293** | **US** | **STOCK_AND_OPTION** | **[US]** | **ACTIVE** |
+| **18767295** | **CN** | **STOCK** | **[CN]** | **ACTIVE** |
+
+> **重要**：之前误判 CN/US 账户"消失"是因为创建 `OpenSecTradeContext` 时未传 `filter_trdmarket`，导致 `get_acc_list()` 默认只返回 HK 市场账户。升级 OpenD 和 SDK 均无用 — 问题出在调用方式上。
+
+> 详见 `references/cn-sim-trading.md` — A 股模拟交易完整手册（账户查询、行情替代、下单方式）。
+
+### Python SDK 运行环境
+
+futu 模块安装在 `/home/admin/.local/lib/python3.11/site-packages/futu/`，但依赖 pandas。系统 Python (`/usr/bin/python3`) 缺 pandas 会导致 `ModuleNotFoundError`。SDK 脚本须在以下 venv 运行：
+
+```bash
+/home/admin/.hermes/hermes-agent/venv/bin/python3
+```
+
+> 📁 **参考**：`references/venv-setup.md` — 全量 venv 架构、依赖清单、合并记录与验证脚本
 
 ### OpenD 连接慢 / 多账户查询超时
 

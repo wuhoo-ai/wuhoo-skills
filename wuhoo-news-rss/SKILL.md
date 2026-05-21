@@ -1,13 +1,15 @@
 ---
 name: wuhoo-news-rss
-description: "RSS 资讯采集与检索引擎。通过 RSSHub + 原生 RSS 源自动采集多类别资讯，存储到 SQLite (FTS5 全文搜索)，支持关键词告警、热点评分、按类别/时间检索。wuhoo 冠名 skill 为 OpenClaw 企业级关键 skill，需重点维护。"
-metadata: { "openclaw": { "emoji": "📰", "requires": { "bins": ["python3.11"], "pip": ["feedparser", "pyyaml"] } } }
+description: "RSS 资讯采集与检索引擎。通过 RSSHub + 原生 RSS 源自动采集多类别资讯，存储到 SQLite (FTS5 全文搜索)，支持关键词告警、热点评分、按类别/时间检索。wuhoo 冠名 skill 为 Hermes 企业级关键 skill，需重点维护。"
+tags: ["wuhoo"]
+category: wuhoo
+metadata: { "hermes": { "emoji": "📰", "requires": { "bins": ["python3.11"], "pip": ["feedparser", "pyyaml"] } } }
 ---
 
 # wuhoo-news-rss — RSS 资讯采集与检索引擎
 
 > **⚠️ 企业级关键 Skill**
-> 以 `wuhoo-` 冠头的 skill 是当前 OpenClaw 系统的**企业级关键 skill**，承担核心业务价值。
+> 以 `wuhoo-` 冠头的 skill 是当前 Hermes 系统的**企业级关键 skill**，承担核心业务价值。
 >
 > **舆情管线优先数据源**：在辩论系统 (Workflow B/C/D) 中，RSS 舆情是综合评分的**最高权重**数据源 (50%)，优先于 TrendRadar 和 Web Search。
 
@@ -34,14 +36,14 @@ RSSHub (--network host, 端口 1200)    Python 采集引擎 (python3.11)
 └──────────────────────────┘         │ 检索接口                     │
        ↕ 外网直连                     └─────────────────────────────┘
                                               ↕
-                                     Heartbeat / Cron
-                                     每小时自动拉取
+                                     Cron Job (每日 09:30, deliver=local)
+                                     自动拉取 + 生成热点简报（local 日志，非微信推送）
 ```
 
 ## 使用方式
 
 ```bash
-cd ~/.openclaw/workspace/agents/main/skills/wuhoo-news-rss
+cd ~/wuhoo-workspace/skills/wuhoo/wuhoo-news-rss
 
 # 注意：必须使用 Python 3.11+
 # 系统默认 python3 是 3.6.8，请使用 /usr/bin/python3.11
@@ -135,9 +137,93 @@ DataAggregator._get_combined_sentiment()
 - `pyyaml` - 配置解析
 - RSSHub (Podman, `--network host`, 端口 1200)
 
+## 已知问题 / 注意事项
+
+- **`--top` 返回 hot_score=0.0**：当前热点评分系统未启用，`--top N` 按最近拉取时间排序而非实际热度。对于主题简报等需要按主题筛选的场景，应使用 `--fts` 全文搜索组合关键词查询来获取更精准的结果。
+- **路径硬编码**：调用 fetcher.py 时请使用绝对路径 `/home/admin/wuhoo-workspace/skills/wuhoo/wuhoo-news-rss/src/fetcher.py`，避免相对路径歧义。
+- **手动简报生成模式**：当 cron 推送失败时，可通过 FTS5 JSON + Python 多查询模式手动生成。详见 [`references/manual-briefing-generation.md`](references/manual-briefing-generation.md)。
+- **微信推送 gateway timeout**：cron delivery 阶段可能出现 `"Timeout context manager should be used inside a task"` 错误（非 session expired）。内容已生成但投递失败。临时方案：保存到本地文件，gateway 恢复后补发。
+
+## Cron 自动简报
+
+> **2026-05-09 更新**：09:30 cron 已恢复，使用 **`deliver=local`** 绕过 Gateway asyncio timeout bug。简报保存到 cron 日志而非微信推送，需要时手动查看或转发。
+
+### Cron 配置
+
+- **Schedule**: `30 9 * * *`（每日 09:30）
+- **Skills**: `wuhoo-news-rss`, `wuhoo-rss-briefing`
+- **Delivery**: `local`（⚠️ 不使用 WeChat/auto，避免 asyncio `Timeout context manager` bug）
+- **流程**: fetch → SQLite 直查 → 噪音过滤 → 四类 TOP 5 输出
+
+### 手动触发（备用）
+
+用户发送"更新收集rss信息，并推送关键主题top新闻给我"即可触发：
+
+1. **拉取**：`/usr/bin/python3.11 ~/wuhoo-workspace/skills/wuhoo/wuhoo-news-rss/src/fetcher.py --fetch`
+2. **分类生成**：使用 `wuhoo-rss-briefing` skill 的 SQLite 直查 + 噪音过滤 + 事件去重流程
+3. **格式化输出**：按四大类各取 TOP，合并多源，微信 Markdown 格式
+
+### 四大分类
+
+| 分类 | 覆盖范围 |
+|------|---------|
+| 🔬 **科技/AI** | 技术突破、AI产品、大模型、半导体 |
+| 💰 **财经/投资** | 港股/美股市场、量化、IPO、大宗商品 |
+| 🏛️ **宏观政策** | 央行政策、地缘政治、贸易协定、监管 |
+| 🏭 **产业/公司** | 重点公司动态、财报、并购、产品发布 |
+
+### 微信推送格式规范
+
+```markdown
+# 📰 Wuhoo 新闻早报 — 2026-05-02
+
+## 🔬 科技/AI
+1. **文章标题** — 来源 | YYYY-MM-DD
+   摘要一句话，不超过50字。
+
+2. **热点话题** [3源] — 源A / 源B | YYYY-MM-DD
+   多源报道同一事件时合并为一条，标注源数。
+
+---
+
+## 💰 财经/投资
+1. ...
+
+---
+
+## 🏛️ 宏观政策
+...
+```
+
+**格式规则**：
+- 每条标题**加粗**，后附来源和日期
+- 摘要一行，**不超过 50 字**
+- 大类之间用 `---` 分隔
+- 同主题不同来源的文章**合并为一条**，标注 `[N源]`
+- 底部标注：总文章数、来源数、检索时间范围
+
+### 主题简报（非微信场景）
+
+生成多主题分类简报的标准流程：
+
+1. **拉取**：`/usr/bin/python3.11 src/fetcher.py --fetch`
+2. **多查询采集**：对每个主题运行 `--fts "<关键词>" --limit 30 --json`，覆盖所有目标主题
+3. **去重分类**：按文章 hash 去重，再按预定义关键词表打分归类
+4. **排序输出**：每个主题按匹配分降序、日期降序排列，取 TOP10
+5. **格式化**：按 `【主题名称】\n 1. 标题 | 来源 | 热度分\n    摘要（100字内）` 格式输出
+
+主题关键词表设计原则：
+- 每个主题 20-50 个关键词，覆盖中英文、缩写、别名
+- 关键词应包含名词（芯片/GPU）、品牌名（NVIDIA/英伟达）、技术术语（HBM/光刻）
+- 避免过于通用的词汇（如"价格"），防止误匹配
+
 ## 版本
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| 1.6 | 2026-05-09 | 恢复 09:30 cron（deliver=local 绕过 Gateway asyncio bug），同时加载 wuhoo-rss-briefing skill |
+| 1.5 | 2026-05-03 | 删除 09:30 cron 微信推送（Gateway asyncio bug），改为手动触发模式；推送格式改用 wuhoo-rss-briefing skill 的 SQLite 直查流程 |
+| 1.4 | 2026-05-02 | Cron push format finalized: 4 categories TOP10, merged multi-source articles [N源], 50-char summaries. WeChat delivery blocked by gateway asyncio timeout bug. |
+| 1.2 | 2026-05-01 | 修复路径错误，添加热点评分说明，新增主题简报生成流程与脚本 |
 | 1.1 | 2026-04-13 | RSSHub 切换为 host 网络模式 + Python 版本检查 + 修复不可用路由 |
 | 1.0 | 2026-04-13 | 初始版本：RSSHub + 原生 RSS 采集，SQLite 存储，FTS5 搜索 |

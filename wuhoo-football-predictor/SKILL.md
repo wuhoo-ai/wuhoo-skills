@@ -1,7 +1,7 @@
 ---
 name: wuhoo-football-predictor
-description: WC2026 单场+全赛事预测系统 v5.6 — Elo+Poisson+Monte Carlo+LLM非结构化信号+客观条件因子+出线动机(QMF)+半区路径(BPP)+淘汰赛校准(KBC)+规则推理引擎(InferenceEngine)+Layer 6手动调整+全量推演(BracketSimulator)，12层模型栈，未来N场预测+全中文报告+体彩串关+数据保鲜检查
-version: 5.9.1
+description: WC2026 单场+全赛事预测系统 v5.11 — Elo+Poisson+Monte Carlo+LLM非结构化信号+客观条件因子+出线动机(QMF)+半区路径(BPP)+淘汰赛校准(KBC)+规则推理引擎(InferenceEngine)+Layer 6手动调整+全量推演(BracketSimulator)，12层模型栈，未来N场预测+全中文报告+体彩串关+数据保鲜检查
+version: 5.11.0
 dependencies:
   - wuhoo-news-rss
   - pandas
@@ -26,6 +26,86 @@ category: wuhoo
 - ✅ **赛果 status 补全**: 手动录入的MD3赛果缺失 `status: "completed"` → `update_elo_from_results.py` 静默跳过 → 已补全
 - ✅ **FIFA官方对阵覆盖**: 用户明确指示淘汰赛对阵以FIFA官方为准。seed_knockout约束算法仅用于验证和降级，最终对阵始终用FIFA官方数据覆盖
 - ✅ **最终推演**: France 41.8%, Argentina 38.3%, Mexico 8.0%（基于非对称ELO+λ上限+官方对阵）
+
+### v5.11 更新 (2026-07-12) — SF 半决赛 PDF 适配 + 3模型分拆 + ELO轨迹注入
+
+**触发**: SF 半决赛 PDF 的 3 模型对比表数值全部相同、ELO 轨迹缺失，用户指出「数值看起来不正常」。
+
+**根因**: `predict_by_date.py` 的 daily JSON 只存 ensemble 值（无 Poisson/Logit 分模型），且 elo_trajectory 未注入 SF 管线。
+
+**修复**:
+- ✅ **gen_qf_pdfs.py SF 段**: 从 `sub_models` 读分模型、从 `e_data.trajectory` 读 ELO 轨迹
+- ✅ **SF enrich 脚本**: 独立计算 Poisson(xG 全矩阵 0-7×0-7) + Logit(有序 Logit) + ELO trajectory
+- ✅ **3 模型值不再相同**: Poisson 纯 xG 校准、Logit 纯 ELO 差校准、Ensemble = 管线综合
+- ✅ **SF 赛程填充**: knockout_schedule.json SF 对阵 team_a/team_b 需手动填充（原为 null）
+- ✅ **PDF 命名规范**: SF{id}_{TeamA}_vs_{TeamB}_{YYYYMMDD}.pdf，纯英文短路径投递
+
+**陷阱**:
+- ⚠️ **SF 赛程 team_a/team_b 为 null**: predict_by_date 需要先手动填入
+- ⚠️ **微信投递 PDF 命名规范**: `{YYYYMMDD}_{TeamA_ISO}_{TeamB_ISO}.pdf`，下划线>2个或含短横线静默失败
+- ⚠️ **Poisson 分模型需独立计算**: xG 全矩阵 0-7×0-7 枚举而非从 JSON 读取
+- ⚠️ **赛程密度取错上一场**: pipeline 可能取到更早的比赛→休息天数异常（14天→应为4-5天），需手动修正 daily JSON 的 prev_match_id
+
+**参考**: 原 `wuhoo-football-sf-pdf` skill 已合并入本 skill（2026-07-13），详见下文「v5.11.1 Skill 合并」章节。
+
+### v5.11.1 更新 (2026-07-13) — Skill 合并 + 单场 PDF 统一
+
+**触发**: 用户发现存在两个 WC2026 预测 skill（wuhoo-football-predictor 和 wuhoo-football-sf-pdf），使用中存在困惑。后者是 7/12 SF 阶段的紧急补丁。
+
+**合并内容**:
+- ✅ **新脚本 `scripts/enrich_predictions.py`**: 从 sf-pdf inline 代码提取，独立可运行 + 可作为模块导入
+  - Poisson 分模型（xG 全矩阵 0-7×0-7）
+  - Logit 分模型（ordered_logit 查表）
+  - ELO 轨迹注入
+  - 支持 `--date` / `--all` / `--latest` CLI
+- ✅ **`gen_qf_pdfs.py` → `gen_match_pdf.py` 重命名 + 全面升级**:
+  - 修复所有硬编码 "QF" → 动态 round 检测
+  - 统一 QF+SF 双路径 → 单一 daily_predictions 读取
+  - Auto-enrich: sub_models 缺失时自动计算（无需手动 enrich）
+  - 小组赛+淘汰赛通用（支持 GS1-3/R32/R16/QF/SF/F/3rd）
+  - 新增 `--date` / `--round` / `--no-enrich` CLI 参数
+- ✅ **`generate_single_match_pdf.py` 标记为 deprecated**: 保留用于向后兼容
+- ✅ **删除 `wuhoo-football-sf-pdf` skill**: 内容全部合并入本 skill
+- ✅ **陷阱合并**: sf-pdf 独有陷阱（3模型相同、ELO轨迹缺失、休息天数14天Bug等）已整合
+
+**简化后的单场 PDF 工作流**:
+```bash
+# 旧（3 步，enrich 需手动 inline 代码）
+python3.11 scripts/predict_by_date.py --date 2026-07-15 --news
+python3.11 -c "…(40行enrich代码)…"
+python3.11 scripts/gen_qf_pdfs.py
+
+# 新（2 步，auto-enrich 内置）
+python3.11 scripts/predict_by_date.py --date 2026-07-15 --news
+python3.11 scripts/gen_match_pdf.py --date 2026-07-15
+```
+
+### v5.10.1 更新 (2026-07-08) — QF单场PDF完整版 + 推演报告增强
+
+**触发**: 用户要求QF预测报告包含教练/阵容/技战术/伤病/场地/天气/旅途/本届表现/新闻等全部信息用于决策。
+
+**新增/变更**:
+- ✅ **gen_qf_pdfs.py 完全重写** (v5.10→v5.10.1): 从1页裸预测→3页10模块完整分析
+  - [风格战术] 两队战术对比（阵型/主帅/进攻/防守/转换/定位球/优势/短板/核心球员）
+  - [伤病报告] 球员伤停明细 + ELO扣分合计
+  - [教练/磨合] FIFA排名/教练/阵容稳定/团队化学/风格
+  - [场地/天气/旅途] venue+Open-Meteo天气+近两场旅途
+  - [本届比赛表现] 每场比分+胜负记录+总得失球
+  - [新闻/RSS] 近5日相关报道（RSSHub+BBC+懂球帝+卫报）
+  - [ELO实力+轨迹] ELO汇总+动态轨迹因子
+  - [预测模型] Ensemble/Poisson/Logit三模型对比
+  - [比分概率] **Top 5** Poisson全矩阵(0-5×0-4=30组合排序)
+  - [判定] 综合预测+置信度+数据源清单
+- ✅ **gen_bracket_pdf.py 增强**: 冠军概率+晋级路径矩阵+QF详情+暗马预警+方法论
+- ✅ **日期自动解析**: knockout_schedule → bracket_recursive_results 双重降级，解决QF赛程日期为"?"问题
+- ✅ **比分从Top 3 → Top 5**: Poisson独立计算全矩阵，不依赖JSON中仅有的3条
+- ✅ **RSS HTML清理**: nohtml()预处理，防止ReportLab Paragraph解析崩溃
+
+**陷阱**:
+- ⚠️ **knockout_schedule QF team_a/team_b为null**: QF对阵尚未写入schedule，需从bracket_recursive_results.json取日期
+- ⚠️ **match_weather QF forecast team_a/team_b为None**: 天气按venue匹配而非team
+- ⚠️ **RSS summary含HTML标签**: 需nohtml()清理后再入Paragraph，否则ReportLab报unclosed tags
+- ⚠️ **v5.10 JSON仅含3条scoreline**: 需从expected_goals独立计算Poisson全矩阵
 
 ### v5.9 更新 (2026-07-04) — R16 全面升级 + Cron 合并 + 递归推演
 
@@ -1109,7 +1189,7 @@ wuhoo-football-predictor/
 ├── scripts/
 │   ├── predict_next_n.py       # v4.3: 未来N场预测 + 中文报告 + 串关
 │   ├── lottery_parlay.py       # v4.3: 体彩串关方案生成器(竞彩71%)
-│   ├── generate_single_match_pdf.py  # v5.5: 单场报告(reportlab,含全层数据源)
+│   ├── generate_single_match_pdf.py  # v5.5: 单场报告(reportlab) [DEPRECATED → gen_match_pdf.py]\n│   ├── gen_qf_pdfs.py               # v5.10: QF单场PDF [RENAMED → gen_match_pdf.py]\n│   ├── gen_match_pdf.py             # v5.11: 单场PDF生成器(10模块, 小组赛+淘汰赛通用)\n│   ├── enrich_predictions.py        # v5.11: 分模型+ELO轨迹注入(独立脚本+模块)
 │   ├── predict_by_date.py      # v3.0: 按日期批量预测
 │   ├── daily_pipeline.py       # cron 管线编排
 │   ├── prediction_models.py    # Poisson + Elo + Factor + Ensemble

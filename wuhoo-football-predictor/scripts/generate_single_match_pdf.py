@@ -1,5 +1,20 @@
 #!/usr/bin/env python3.11
-"""单场预测PDF生成器 — 干净排版 + 数据源标注 + v5.5推理路径"""
+"""
+DEPRECATED — 请使用 gen_match_pdf.py 代替。
+
+gen_match_pdf.py (v5.11) 功能更完整:
+  - 10 模块完整分析（战术/伤病/教练/场地/天气/旅途/表现/RSS/ELO/比分）
+  - 3 模型对比（Ensemble/Poisson/Logit）
+  - ELO 动态轨迹
+  - 推理引擎路径
+  - 小组赛+淘汰赛通用
+  - 自动 enrich（sub_models 缺失时自动计算）
+
+本文件保留用于向后兼容和参考，不再推荐使用。
+
+原文档:
+单场预测PDF生成器 — 干净排版 + 数据源标注 + v5.5推理路径
+"""
 import json, os, sys
 from pathlib import Path
 from reportlab.lib.pagesizes import A4
@@ -159,15 +174,19 @@ def build_match_pdf(match_data, idx, output_path):
 
     # ── Coach ──
     l3 = layers.get('3_coach_meta', {})
-    story.append(P('[L3] 教练/团队磨合 — 数据源: team_profiles.json', 'h3'))
-    rows = [
-        ['教练经验', f'{_fs(l3,"team_a_breakdown","coach")}', f'{_fs(l3,"team_b_breakdown","coach")}', '世界杯执教场次'],
-        ['历史战绩', f'{_fs(l3,"team_a_breakdown","result")}', f'{_fs(l3,"team_b_breakdown","result")}', '队史最佳成绩'],
-        ['阵容稳定', f'{_fs(l3,"team_a_breakdown","stability")}', f'{_fs(l3,"team_b_breakdown","stability")}', '核心保留率'],
-        ['团队化学', f'{_fs(l3,"team_a_breakdown","chemistry")}', f'{_fs(l3,"team_b_breakdown","chemistry")}', '合练默契度'],
-        ['合计', f'{ba(l3.get("team_a_adjustment",0))}', f'{ba(l3.get("team_b_adjustment",0))}', ''],
-    ]
-    story.append(make_table(['维度', na, nb, '说明'], rows))
+    story.append(P('[L3] 教练/阵容 — 数据源: team_tactics.json + team_profiles.json', 'h3'))
+    
+    for te, tc in [(ta, na), (tb, nb)]:
+        prof = TEAM_PROFILES.get(te, {})
+        tac = TACTICS_DB.get(te, {})
+        coach_name = tac.get('coach', '') or prof.get('coach', '') or '?'
+        fm = tac.get('formation', '') or '?'
+        wc_best = prof.get('wc_best', '?')
+        adj = int(l3.get('team_a_adjustment' if te == ta else 'team_b_adjustment', 0))
+        story.append(P(
+            '{} | 主帅: {} | 常用阵型: {} | 世界杯最佳: {} | ELO调整: {:+d}'.format(
+                tc, coach_name, fm, wc_best, adj),
+            'body'))
 
     # ── Venue + Weather + Schedule ──
     l4 = layers.get('4_venue', {})
@@ -343,7 +362,7 @@ def _fetch_rss_articles(team_a, team_b):
     """Fetch recent RSS articles mentioning either team"""
     import sqlite3
     db_path = '/home/admin/wuhoo-workspace/skills/wuhoo/wuhoo-news-rss/data/news.db'
-    EXCLUDED = {'SoccerNews', 'World Soccer Talk', 'Football Rankings'}
+    EXCLUDED = {'SoccerNews', 'Football Rankings'}
     try:
         db = sqlite3.connect(db_path)
         placeholders = ','.join('?' * len(EXCLUDED))

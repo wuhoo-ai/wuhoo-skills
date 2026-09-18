@@ -725,3 +725,142 @@ class TestNoise20260915:
         assert not is_noise('小米 18 Fold 中折叠手机拥有 1.2 米抗跌落能力，雷军称媲美直板旗舰')
         assert not is_noise('特斯拉 Q3 交付量创新高，上海超级工厂产能利用率达 95%')
         assert not is_noise('牛津大学团队获 1.5 亿英镑科研资助，将建新实验室')
+
+
+class TestNoise20260916:
+    """2026-09-16: Engadget 促销帖 (Prime Big Deal Days) / IT之家消费电子发售续三 (影石发布, 同类 米家/漫步者/机械革命)"""
+
+    def test_new_noise_patterns(self):
+        for t in ["Amazon's Prime Big Deal Days sale returns in October",
+                  '影石 Mic Pro 腾讯会议版 AI 录音领夹麦发布，698 元']:
+            assert is_noise(t), t
+
+    def test_corp_news_not_noise(self):
+        assert not is_noise('影石 X5 全景相机获 DXOMARK 评测最高分')
+        assert not is_noise('亚马逊云科技发布新一代自研 AI 芯片 Trainium 4')
+
+
+class TestEngadgetGuideConsidering20260916:
+    """2026-09-16: Engadget 导购类扩 considering — 'Considering a Level 2 EV charger? How to know if you need one'
+    hot6 占产业/公司候选, 与 How-to 同类为非新闻事件。该正则为 feed 级过滤 (仅 Engadget feed 启用), 非全局噪声。"""
+
+    G = NS['ENGADGET_GUIDE_RE']
+
+    def test_considering_guide_matches(self):
+        assert self.G.search('Considering a Level 2 EV charger? How to know if you need one')
+        assert self.G.search('How to change Amazon Alexa’s voice and personality')
+
+    def test_news_not_match(self):
+        assert not self.G.search('EV charger demand is outstripping supply, says ChargePoint report')
+
+class TestFedRateHike20260917:
+    """2026-09-17: 美联储三年来首次加息 (09-16 FOMC) 13源39条不合并
+    (BBC19 'US interest rates raised for first time in three years' 无 Fed 字样 /
+     FT12 'Fed defies Trump with first rate rise' / 华尔街见闻×5 / NYT×6 /
+     德国之声 / 中央社×4 (聯準會繁体) / HN / CoinDesk×2 / RFI / 虎嗅 / 凤凰网×2 / 第一财经×4)"""
+
+    MERGE_CASES = [
+        ("US interest rates raised for first time in three years",
+         "Rates were hiked in a unanimous decision despite fierce opposition"),
+        ("Fed defies Trump with first rate rise since 2023",
+         "President calls for 1% borrowing costs after US central bank"),
+        ("Live updates: Bitcoin steady as stocks slide following Fed rate hike, Warsh press conference", ""),
+        ("白宫抨击美联储加息决定“相当令人遗憾”，特朗普敦促降息至1%以下、仍对沃什有信心", ""),
+        ("美联储加息并暗示更多紧缩，美国股债齐跌，AI板块相对抗跌", ""),
+        ("沃什：加息展现FOMC内部坚定一致，通胀太高太久", ""),
+        ("打脸特朗普！美联储全票通过三年来首次加息，点阵图料年内还将加一次", ""),
+        ("Takeaways From the Fed’s Decision to Raise Interest Rates", ""),
+        ("Fed Raises Rates in First Major Step by Warsh to Contain Inflation", ""),
+        ("US Fed raises key rate for first time in 3 years", ""),
+        ("聯準會升息1碼　2023年以來首度調升利率", ""),
+        ("Fed hikes rates as inflation worries push up bond yields", ""),
+        ("美联储三年来首次加息 暗示将继续收紧政策", ""),
+        ("美联储加息25个基点", ""),
+    ]
+
+    def test_all_map_to_same_key(self):
+        for t, s in self.MERGE_CASES:
+            assert entity_key(t, s) == 'fed_rate_hike', (t, entity_key(t, s))
+
+    def test_no_false_positive(self):
+        # 'feds?' 词边界: Fedex≠Fed; 英央行/欧洲央行/IMF 无 fed 锚点不并;
+        # 裸 borrow rate rise 无锚点不并
+        for t in ['Fedex raises shipping rates',
+                  'IMF downgrades Australian economic forecast amid fears of interest rate hike',
+                  'Bank of England holds rates as inflation cools',
+                  'European Central Bank rate hike expected in October',
+                  'Key U.S. Borrowing Rate Rises to Highest Level Since 2007']:
+            assert entity_key(t, '') is None, (t, entity_key(t, ''))
+
+    def test_merge_across_sources(self):
+        arts = [_art('US interest rates raised for first time in three years', '', feed='BBC Business', hot=19),
+                _art('Fed defies Trump with first rate rise since 2023', '', feed='Financial Times', hot=12),
+                _art('美联储加息并暗示更多紧缩', '', feed='华尔街见闻', hot=11),
+                _art('聯準會升息1碼　2023年以來首度調升利率', '', feed='中央社', hot=9)]
+        groups = group_events(arts)
+        assert len(groups) == 1 and len(groups[0]) == 4, f'{len(groups)} 组'
+
+class TestNoise20260917:
+    """2026-09-17: 虎嗅个人专栏 '战魔田默｜中国品牌出海…全球定价权' 占产业/公司 TOP5
+    (同类 朱思码记 — 署名式个人专栏/非新闻事件)"""
+
+    def test_new_noise_patterns(self):
+        assert is_noise('战魔田默｜中国品牌出海之后，为什么最难的一关是全球定价权？')
+
+    def test_corp_news_not_noise(self):
+        assert not is_noise('中国品牌出海营收创新高，海外仓布局提速')
+    def test_game_skin_noise(self):
+        assert is_noise('《暗黑破坏神 4》杰洛特皮肤引争议：仅暴雪自家战网平台可预购获取')
+    def test_game_crossover_noise(self):
+        assert is_noise('《Apex 英雄》游戏官宣联动《街头霸王》，9 月 22 日正式上线')
+        assert is_noise('某游戏推出限定皮肤活动')
+
+
+class TestCanadaEuAssociate20260918:
+    """2026-09-18: 加拿大成欧盟首个'准成员'提案 — HN 英文版与德国之声 Von der Leyen 版同事件不合并，
+    各占宏观 TOP1/TOP4"""
+
+    MERGE_CASES = [
+        ("Canada welcomes EU proposal to become 'associate member'", ''),
+        ("Von der Leyen eyes Canada as EU's first 'associate member'", ''),
+        ("卡尼欢迎欧盟邀请加拿大成为准成员", ''),
+    ]
+
+    def test_all_map_to_same_key(self):
+        for t, s in self.MERGE_CASES:
+            assert entity_key(t, s) == 'canada_eu_associate', (t, entity_key(t, s))
+
+    def test_no_false_positive(self):
+        # 无 associate/准成员 语境的一般加欧新闻不并
+        for t in ['Canada and EU sign new trade deal',
+                  'Germany welcomes additional US military base',
+                  'Associate justice nominated to supreme court']:
+            assert entity_key(t, '') is None, (t, entity_key(t, ''))
+
+    def test_merge_across_sources(self):
+        arts = [_art("Canada welcomes EU proposal to become 'associate member'", feed='Hacker News', hot=11),
+                _art("Von der Leyen eyes Canada as EU's first 'associate member'", feed='德国之声中文', hot=10)]
+        groups = group_events(arts)
+        assert len(groups) == 1 and len(groups[0]) == 2, f'{len(groups)} 组'
+
+
+class TestNoise20260918:
+    """2026-09-18: HN 开源项目/社区展示帖 (Bend 语言/Neovim 比特币捐赠) 占科技/财经 TOP5;
+    IT之家手机供应链软文 (京东方独供) 占产业 TOP5"""
+
+    def test_hn_project_posts_noise(self):
+        assert is_noise('Bend – A language that blocks AI mistakes via proof, on CPU and GPU')
+        assert is_noise('Neovim have a ~$800k Bitcoin donation sitting untouched since 2023')
+
+    def test_supply_chain_pr_noise(self):
+        assert is_noise('京东方：为努比亚 NaviX Ultra 独供 AI 原生旗舰屏幕，息屏也能低功耗支撑 AI 后台运行')
+
+    def test_legit_news_not_noise(self):
+        assert not is_noise('NVIDIA launches new GPU for data centers')
+        assert not is_noise('京东方上半年净利润同比增长 30%')
+
+    def test_multi_author_byline_stripped(self):
+        # 2026-09-18: NYT中文多作者署名含逗号 "MATINA STEVIS-GRIDNEFF, JEANNA SMIALEK2026年9月17日周三，…"
+        # 旧字符类无逗号 → 署名吃满 50 字窗口 (canada_eu_associate 代表实测)
+        s = clean_summary('MATINA STEVIS-GRIDNEFF, JEANNA SMIALEK2026年9月17日周三，加拿大欢迎欧盟准成员提案')
+        assert s.startswith('加拿大欢迎'), repr(s)

@@ -47,7 +47,7 @@ def clean_summary(s, feed_name=''):
     s = re.sub(r'\s+', ' ', s).strip()
     # 2026-09-10: 通用前缀清理 — NYT中文 "KALLEY HUANG2026年9月10日周三，..." 署名+前导日期 (iPhone Duo 代表回填实测);
     # RFI "09/09/2026 - 20:54 ..." 时间戳 (巴黎空间峰会条目实测)
-    s = re.sub(r'^[A-Z][A-Za-z.\-\s]{1,40}(?=\d{4}年\d{1,2}月)', '', s)
+    s = re.sub(r'^[A-Z][A-Za-z.\-\s,，]{1,40}(?=\d{4}年\d{1,2}月)', '', s)  # 2026-09-18: 补逗号 — 多作者署名 "MATINA STEVIS-GRIDNEFF, JEANNA SMIALEK2026年…" (canada_eu_associate 代表实测)
     s = re.sub(r'^\d{4}年\d{1,2}月\d{1,2}日(周|星期)?[一二三四五六日]?[，,\s]*', '', s)
     s = re.sub(r'^\d{2}/\d{2}/\d{4}\s*-\s*\d{1,2}:\d{2}\s*', '', s)
     # 2026-09-14: 中央社 byline 前缀 — "（中央社舊金山11日綜合外電報導）…" 吃满 50 字摘要窗口 (RubyGems 合并回填实测)
@@ -60,7 +60,7 @@ def clean_summary(s, feed_name=''):
 FEED_NOISE_RE = re.compile(r'arxiv|知乎日报', re.I)
 SPORT_FEED_RE = re.compile(r'football|soccer|sport', re.I)
 SA_LOW_RE = re.compile(r'q[12]\s*20\d\d|commentary|portfolio update|earnings call|presents at|slideshow|m&a call', re.I)  # 2026-09-11: 会议 slideshow/transcript 自动材料 (hot19 挤占财经 TOP2)
-ENGADGET_GUIDE_RE = re.compile(r'^how to\b', re.I)  # 2026-09-13: Engadget How-to 指南 (非新闻事件; 实测占产业/公司 TOP4)
+ENGADGET_GUIDE_RE = re.compile(r'^(how to|considering)\b', re.I)  # 2026-09-13: Engadget How-to 指南 (非新闻事件; 实测占产业/公司 TOP4); 2026-09-16 扩 considering ("Considering a Level 2 EV charger?…" 导购 hot6)
 
 # ── 噪声模式 (全量, skill 2026-08-20 版) ───────────────
 NOISE_PATTERNS = [
@@ -127,6 +127,13 @@ NOISE_PATTERNS = [
     '哥倫比亞.*候選', '哥倫比亞.*總統',
     '鹅腿阿姨', '成本价.*块', '塌房', '清澈的愚蠢',
     '朱思码记', '西湖论功', '雍正', '断桥',
+    # 2026-09-17 新增 — 虎嗅个人专栏 (同类 朱思码记; "战魔田默｜…全球定价权" 占产业/公司 TOP5, 非新闻事件)
+    '战魔田默',
+    # 2026-09-17 新增 — 游戏皮肤/预购争议 (同类 gta/深海迷航; "《暗黑破坏神 4》杰洛特皮肤引争议" 占产业/公司 TOP5)
+    '暗黑破坏神', '杰洛特', '游戏皮肤',
+    # 2026-09-17 续 — 游戏联动/皮肤公告 (同类; "《Apex 英雄》游戏官宣联动《街头霸王》" 递补占 TOP5,
+    # 泛化规则: 游戏+联动/皮肤 组合; apex 需限定 '英雄' 防误伤公司名 Apex)
+    '游戏.*(联动|皮肤)', '(联动|皮肤).*游戏', r'apex\s*英雄', '街头霸王',
     '泰国.*公主', '泰国.*病逝', '公主.*病逝', '公主.*逝世',
     '王室.*公告', 'royal.*palace', '泰国王室', '宮務處',
     'thai princess', 'bajrakitiyabha', 'dies after years in coma',
@@ -173,6 +180,12 @@ NOISE_PATTERNS = [
     # 2026-09-02 新增 — IT之家消费电子发售挤占产业/公司 TOP (同类: vgn鼠标/外设; 米家冰箱/制冰机/漫步者音箱/HKC手柄)
     '米家.*(首销|发售|开售|预售|众筹)', '漫步者.*(首销|发售|开售|预售)', '猎弦', '绝梦',
     'ankidroid',                                      # HN 小众 App 捐赠链接政策变动 (低信号, 非新闻事件)
+    # 2026-09-18 新增 — HN 开源项目/编程语言展示帖 (同类: marty/ankidroid/run any company autonomously;
+    # "Bend – A language that blocks AI mistakes via proof" 占科技/AI TOP3、"Neovim have a ~$800k Bitcoin
+    # donation sitting untouched since 2023" 占财经 TOP5, 均为社区话题非新闻事件)
+    'blocks ai mistakes', 'neovim',
+    # 2026-09-18 新增 — IT之家手机供应链软文 (京东方为努比亚新机型"独供"屏幕, 营销稿非独立事件, 同类 消费电子发售系列)
+    '京东方.*(独供|供货)',
     'refund when using your credit card',             # BBC Business 信用卡退款科普 (category=财经 加权误入财经 TOP)
     'fortrea',                                        # Seeking Alpha 单股分析 (Fortrea Holdings 中盘CRO, 低信号)
     # 2026-09-05 新增 — 少数派"派早报"日更聚合栏目 (同类: IT早报/早餐FM/fm-radio, 每日多资讯打包非单一事件)
@@ -206,6 +219,10 @@ NOISE_PATTERNS = [
     # 2026-09-15 新增 — BBC 软内容: 健康研究/学生防盗指南/搬家补贴个人故事 (同类: 月经周期/back to school/plug-in solar;
     # 实测 "滚烫饮品可增加患癌风险" hot11 占科技/AI 候选、"How to protect your laptop…"/"I got paid $5,000 to move…" 占财经 11 分档)
     '滚烫饮品', 'protect your laptop', 'got paid .{0,12}to move',
+    # 2026-09-16 新增 — Engadget 促销帖 (同类: best deals/where to preorder/half off; "Amazon's Prime Big Deal Days sale returns in October" hot6 占产业/公司候选)
+    'big deal days',
+    # 2026-09-16 新增 — IT之家消费电子发售续三 (同类: 米家/漫步者/机械革命/努比亚; 实测 "影石 Mic Pro 腾讯会议版…发布" hot6 占产业/公司候选)
+    '影石.*(发布|开售|首销|上架|首发|众筹)',
 ]
 
 def is_noise(text):
@@ -395,6 +412,18 @@ ENTITY_KEYS = [
                 r'|(slow ?down|slowdown|放缓|放慢|减速|刹车).{0,60}(amodei|阿莫迪|安特罗匹克|anthropic|阿莫戴)'
                 r'|(slow ?down|slowdown|放缓|放慢|减速|刹车).{0,55}((?<![a-z])ai(?![a-z])|a\.i\.?|artificial intelligence|人工智能|前沿)'
                 r'|((?<![a-z])ai(?![a-z])|a\.i\.?|artificial intelligence|人工智能).{0,55}(slow ?down|slowdown|放缓|放慢|减速|刹车)', re.I), 'ai_slowdown_debate'),
+    # 2026-09-17: 美联储三年来首次加息 (09-16 FOMC, 三年来首次加息+暗示更多紧缩; BBC19/FT12/华尔街见闻×5/NYT×3/
+    # 德国之声/中央社/HN/CoinDesk×2/RFI 约10源标题各异不合并, 财经 TOP5 第1+第5位被同事件拆开占据)
+    # 锚点=美联储/联准会/Fed/Warsh+加息语境; 防误并: 'feds?' 词边界 (federal 不单独命中, 显式加 federal reserve);
+    # 英澳/英央行不并 (无 fed 锚点; 'IMF...Australian...interest rate hike' 因 hike 非 raised 且无锚点不并);
+    # BBC 版标题 'US interest rates raised for first time...' 无 Fed 字样 → 专列独立分支 (48h 窗口内唯一指该事件)
+    (re.compile(r'(?:\bfeds?\b|federal reserve|美联储|聯準|联准会).{0,50}(?:rate hike|first rate (?:hike|rise|increase)|\bhikes? (?:the )?(?:key |interest )?rates?\b|raises? (?:the )?(?:key |interest )?rates?\b|interest rates? (?:were )?(?:raised|hiked)|rais\w*\s+interest\s+rates?|加息|升息|調升利率|调升利率)'
+                r'|(?:rate hike|加息|升息).{0,50}(?:\bfeds?\b|federal reserve|美联储|聯準|联准会)'
+                r'|(?:warsh|沃什).{0,40}(?:rate|加息|升息|hike)'
+                r'|interest rates raised for (?:the )?first time', re.I), 'fed_rate_hike'),
+    # 2026-09-18: 加拿大成欧盟首个"准成员"提案 (HN 英文标题 / 德国之声 "Von der Leyen eyes Canada..." 同事件标题各异不合并,
+    # 各占宏观 TOP1/TOP4; 锚点须带 associate/准成员 语境防一般加欧新闻误并; von der leyen 标题用 "first associate member")
+    (re.compile(r'(canad|carney|卡尼|加拿大).{0,80}(associate|quasi[- ]member|准成员)|(associate|quasi[- ]member|准成员).{0,80}(canad|carney|卡尼|加拿大)', re.I), 'canada_eu_associate'),
 ]
 
 def entity_key(title, summary):

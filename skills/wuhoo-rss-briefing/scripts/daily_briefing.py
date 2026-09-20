@@ -24,15 +24,38 @@ def clean_title(t):
     t = re.sub(r'\s*-\s*RFI\s*-\s*法国国际广播电台\s*$', '', t).strip()  # 2026-09-10: RFI 标题尾部来源后缀与来源名重复
     return t
 
+def _is_caption_phrase(pre):
+    """2026-09-20: 判断 "节目全长" 之前的片段是否为视频说明文字 (而非正文)。
+
+    说明文字特征: 单句短语、无句末标点 (句末标点只允许出现在末尾, 如问句标题
+    "How much can Canada fight back…US?"), 且长度 ≤ 140 字。正文中的 "节目全长约 40 分钟"
+    等用法不含 "N,NN HH:MM" 时长格式, 不会走到这里。
+    """
+    p = re.sub(r'^(?:你的器材不支持播放多媒体材料|Play video,?|Watch:)', ' ', pre).strip(' \t\r\n,，、;；:：\'"“”')
+    if not p or len(p) > 140:
+        return False
+    body = p[:-1] if p[-1] in '。！!？?' else p
+    return not re.search(r'[。！!？?]|\.\s|[?!]\s', body)
+
+
 def clean_summary(s, feed_name=''):
     s = clean_html(s).strip()
     # HN: 评论链接形式
     s = re.split(r'Comments on Hacker News|Article URL:|Comments URL:', s)[0]
     s = re.sub(r'^你的器材不支持播放多媒体材料\s*Play video,?\s*', '', s)
-    # 2026-09-13: BBC 视频字幕残留 — "Watch: <caption> , 节目全长 N,NN HH:MM" 占满 50 字摘要窗口
-    # (实测: 特朗普5000美元 BBC版 hot19 / 印尼火山 / 关税加拿大 / 西藏泥石流; 剥离后如无正文由事件组内中文成员摘要回填)
-    # 锚定视频时长格式 N,NN HH:MM — IT之家"节目全长约 40 分钟"等正文合法用法不受影响
-    s = re.sub(r'^.{0,90}?节目全长\s*\d+,\d+\s*\d{1,2}:\d{2}\s*', ' ', s, flags=re.DOTALL)
+    # 2026-09-13: BBC 视频说明文字 — "Watch: <caption> , 节目全长 N,NN HH:MM" 占满 50 字摘要窗口
+    # (实测: 特朗普5000美元 BBC版 hot19 / 印尼火山 / 关税加拿大 / 西藏泥石流).
+    # 2026-09-20 改锚点式: 旧写法 `^.{0,90}?节目全长...` 无差别从行首吞到时长处 — 若说明文字前有正文则正文一并丢失;
+    # 现仅从 "你的器材不支持播放多媒体材料 / Play video / Watch:" 标记起删除, 且时长可缺失 (DB 中部分摘要截断在 "节目全长 2,00")。
+    # 摘要若因此为空: 优先由同事件其他源正文回填, 仍无则用 video_caption() 兜底
+    s = re.sub(r'(?:你的器材不支持播放多媒体材料|Play video,?|Watch:).{0,150}?节目全长\s*\d+,\d+\s*(?:\d{1,2}:\d{2})?\s*',
+               ' ', s, flags=re.DOTALL)
+    # 2026-09-20: 整条摘要就是一条视频说明 (caption + "节目全长 N,NN HH:MM", 前后无正文) → 返回空,
+    # 交由主流程先做组内其他源正文回填 (2026-09-13 意图), 组内也无正文时才用 video_caption() 兜底。
+    # 判定要点: 必须有 "节目全长 N,NN 时长" 格式 (正文里的 "节目全长约 40 分钟" 不触发) + 前置短语无句末标点。
+    m_v = re.search(r'^(.*?)\s*节目全长\s*\d+,\d+\s*(?:\d{1,2}:\d{2})?\s*$', s, flags=re.DOTALL)
+    if m_v and _is_caption_phrase(m_v.group(1)):
+        return ''
     s = re.sub(r'^IT?之家\s*\d+\s*月\s*\d+\s*日\s*消息[，,]?', '', s)
     # BBC 中文 byline 结构 (仅该源)
     if 'bbc 中文' in feed_name.lower():
@@ -56,10 +79,32 @@ def clean_summary(s, feed_name=''):
         return ''
     return s[:50]
 
+def video_caption(raw):
+    """2026-09-20: BBC 视频条目说明文字 — 当摘要其余内容被剥离干净时, 主流程用它兜底 (否则显示 (无摘要))。
+
+    实测 BBC 中文视频条目 summary 整体 = "你的器材不支持播放多媒体材料 Play video, <caption> , 节目全长 N,NN HH:MM",
+    clean_summary 剥离后为空; 组内若无其他源正文可回填, 展示为 (无摘要)。仅作兜底, 不参与正常摘要路径,
+    以免说明文字顶掉同事件中文源的正文回填 (2026-09-13 的原始意图)。
+    """
+    s = clean_html(raw).strip()
+    m = VIDEO_CAP_RE.search(s)
+    if not m:
+        return ''
+    cap = re.sub(r'你的器材不支持播放多媒体材料|Play video,?|Watch:|图像来源[^\s]*?[,，、]\s*', ' ', m.group(1))
+    cap = re.sub(r'[\u201c\u201d"\']', '', cap)
+    cap = re.sub(r'\s+', ' ', cap).strip(' ,，、:：')
+    if len(re.sub(r'[^A-Za-z0-9\u4e00-\u9fff]', '', cap)) < 5:
+        return ''
+    return cap[:50]
+
+VIDEO_CAP_RE = re.compile(r'^(.*?)节目全长\s*\d+,\d+\s*(?:\d{1,2}:\d{2})?', re.DOTALL)
+
 # ── Feed 级过滤 ───────────────────────────────────────
 FEED_NOISE_RE = re.compile(r'arxiv|知乎日报', re.I)
 SPORT_FEED_RE = re.compile(r'football|soccer|sport', re.I)
-SA_LOW_RE = re.compile(r'q[12]\s*20\d\d|commentary|portfolio update|earnings call|presents at|slideshow|m&a call', re.I)  # 2026-09-11: 会议 slideshow/transcript 自动材料 (hot19 挤占财经 TOP2)
+# 2026-09-19: 扩 transcript/discusses/analyst-investor day — 实测 'Vicinity Centres … Discusses Capability Showcase … Transcript'(hot11)
+# 与 'AeroVironment … Analyst/Investor Day Transcript'(hot11) 漏过旧规则占财经/投资 TOP5
+SA_LOW_RE = re.compile(r'q[12]\s*20\d\d|commentary|portfolio update|earnings call|presents at|slideshow|m&a call|\btranscript\b|discusses|analyst/investor day', re.I)  # 2026-09-11: 会议 slideshow/transcript 自动材料 (hot19 挤占财经 TOP2)
 ENGADGET_GUIDE_RE = re.compile(r'^(how to|considering)\b', re.I)  # 2026-09-13: Engadget How-to 指南 (非新闻事件; 实测占产业/公司 TOP4); 2026-09-16 扩 considering ("Considering a Level 2 EV charger?…" 导购 hot6)
 
 # ── 噪声模式 (全量, skill 2026-08-20 版) ───────────────
@@ -223,6 +268,27 @@ NOISE_PATTERNS = [
     'big deal days',
     # 2026-09-16 新增 — IT之家消费电子发售续三 (同类: 米家/漫步者/机械革命/努比亚; 实测 "影石 Mic Pro 腾讯会议版…发布" hot6 占产业/公司候选)
     '影石.*(发布|开售|首销|上架|首发|众筹)',
+    # 2026-09-19 新增 — HN 开发工具细枝末节帖 (非新闻事件, 同类 ankidroid/neovim/派早报;
+    # 实测 'Claude Code now reads AGENTS.md if there is no Claude.md' HN hot14 占科技/AI TOP3)
+    'agents\\.md',
+    # 2026-09-19 新增 — BBC Business 街头采访软内容 (同类 money disagre/central london shoppers/spend too much on;
+    # 实测 \"'I would tip up to 30% at a restaurant'\" hot11 进财经/投资候选)
+    'tip up to',
+    # 2026-09-20 新增 — IT之家消费电子发售续四 (同类 米家/漫步者/爱国者/技嘉/利民/九州风神/机械革命/努比亚/影石;
+    # 实测 达尔优 A5 游戏耳机发布 hot6 占产业/公司 TOP4、尼康 Z5IIC 新机预告 hot3、京东 iPhone 18 Pro 开售签收稿 hot12 占科技/AI TOP5)
+    '达尔优.*(发布|开售|首销|预售|上架|发售)',
+    # 尼康规则限定产品词 (防误伤 "尼康发布财报" 类公司新闻)
+    r'尼康.*(Z\d|相机|镜头|无反|微单).*(发布|开售|首销|预售|上架|发售)|尼康.*(发布|开售|首销|预售|上架|发售).*(相机|镜头|Z\d)',
+    '京东.*(开售|首销|预售|开卖|签收新机)',
+    # 2026-09-20 新增 — HN 一次性博客演示帖 (非新闻事件; 同类 marty/neovim/ankidroid/blocks ai mistakes;
+    # 实测 'GPT-6 Astra Solves a WWI German Radio Cipher' hot14 占科技/AI TOP2 且无摘要)
+    'radio cipher',
+    # 2026-09-20 新增 — 文化/地方治安软内容 (实测 德国之声 'Aztec manuscript loaned back to Mexico after two centuries'
+    # hot11 因 'mexico' 命中宏观政策表占宏观 TOP3; 卫报墨尔本烟草店纵火案为地方治安)
+    'aztec', 'manuscript loaned',
+    'tobacconist', 'firebomb',
+    # 2026-09-20 新增 — Engadget 消费评论软文 (非新闻事件; 'Why buy a streaming device when you have a smart TV?')
+    'why buy a streaming device',
 ]
 
 def is_noise(text):
@@ -316,6 +382,10 @@ def classify(text, category_field):
         scores['宏观政策'] += 2
     if re.search(r'trade deal|trade talks|trade agreement|贸易协议|贸易协定|trade war|贸易战', text, re.I):
         scores['宏观政策'] += 3
+    # 2026-09-19: AI 风险/超级智能话题 → 科技/AI (BBC Business "Uncontrolled AI could lead to 'silicon species' rivalling humans"
+    # 因 category=财经 +3 且财经关键词=0 被误分为财经/投资 TOP1; hot17)
+    if re.search(r'silicon species|superintelligence|超级智能|超級智能|\bagi\b', text, re.I):
+        scores['科技/AI'] += 3
     # database category 加权 (只信 财经/投资/ai)
     cm = {'财经': '财经/投资', '投资': '财经/投资', 'ai': '科技/AI'}
     if category_field in cm:
@@ -424,6 +494,25 @@ ENTITY_KEYS = [
     # 2026-09-18: 加拿大成欧盟首个"准成员"提案 (HN 英文标题 / 德国之声 "Von der Leyen eyes Canada..." 同事件标题各异不合并,
     # 各占宏观 TOP1/TOP4; 锚点须带 associate/准成员 语境防一般加欧新闻误并; von der leyen 标题用 "first associate member")
     (re.compile(r'(canad|carney|卡尼|加拿大).{0,80}(associate|quasi[- ]member|准成员)|(associate|quasi[- ]member|准成员).{0,80}(canad|carney|卡尼|加拿大)', re.I), 'canada_eu_associate'),
+    # 2026-09-19: OpenAI 披露模型"异常行为"透明度报告 (德国之声14/IT之家9/FT6/Engadget6/华尔街见闻3 共5源标题各异不合并:
+    # discloses new 'concerning' behavior / 披露 GPT-5.6 Sol 异常行为 / reveals more instances of concerning AI model behaviors;
+    # 模糊防误并: 必须带 concerning/异常行为/隐瞒/六起/transparency report 语境, 不用泛 'behaviors' 裸词)
+    (re.compile(r'openai.{0,70}(concerning|transparency report|異常行為|异常行为|令人擔憂|令人担忧|隱瞞|隐瞒|撒謊|撒谎|六起)', re.I), 'openai_transparency'),
+    # 2026-09-19: Google 发布新实验性 "CC" AI 智能体 (Engadget12/TechCrunch12/Ars12 三源同事件标题各异不合并;
+    # 必须带 \bcc\b 产品名 — Verge "Google will now let any AI agent run your smart home"(hot15) 属不同事件不并)
+    (re.compile(r'(google|谷歌).{0,40}\bcc\b.{0,70}(ai agent|agent|famil|household|家庭|助手)|\bcc\b.{0,60}(ai agent|agent).{0,60}(famil|household|家庭)', re.I), 'google_cc_agent'),
+    # 2026-09-19: 习近平访美随行企业高管名单 (中央社 + RFI 两条同事件: 中际旭创/小米/宁德时代/比亚迪 等随行, 川习会 09-24)
+    (re.compile(r'(?:随|隨|随同|随行|高管|代表团|代表團|商界|陪).{0,40}[习習]近平.{0,20}(访|訪)美|[习習]近平.{0,20}(访|訪)美.{0,80}(高管|国宴|國宴|随行|隨行|名单|名單)', re.I), 'xi_us_visit'),
+    # 2026-09-19: 巴菲特卸任伯克希尔董事长 (BBC11/DW11/虎嗅3/HN3/NYT3/中央社3 共6源标题各异不合并, 当日最大财经人事事件)
+    (re.compile(r'(buffett|巴菲特).{0,60}(steps? down|stepping down|卸任|接任|chairman|董事長|董事长)|(chairman|董事長|董事长|卸任).{0,40}(buffett|巴菲特)', re.I), 'buffett_stepdown'),
+    # 2026-09-20: Google Gemini 越狱后自主入侵三家真实企业事件 (Verge18/FT12/DW12/TechCrunch9/BBC World9/Engadget9/
+    # IT之家6/格隆汇3/第一财经3/德国之声中文3 共10源标题各异不合并 → 同一事件同时占 科技/AI TOP1 与 财经/投资 TOP3,
+    # [N源] 失效且跨分类重复; 锚点必须是 gemini (裸 google 会把 Chrome/Android 漏洞类新闻误并),
+    # 中文源用 谷歌+入侵/越狱 窄分支兜底; 触发词仅取越狱/入侵/rogue/hack 语境,
+    # 排除 "Gemini 4 Pro偷跑上线/碾压Astra和Fable"(模型发布, 无入侵语境) 与 "Gemini三度窥秘越轨"(DW 中文评论, 无入侵语境)
+    (re.compile(r'gemini.{0,50}(rogue|hack|hacked|hacking|hacker|越狱|越獄|入侵|自主接入|escaped|逃逸|安全测试|安全測試|security test|testing environment)'
+                r'|(rogue|hack|hacked|hacking|hacker|越狱|越獄|入侵|自主接入|escaped|逃逸).{0,50}gemini'
+                r'|(谷歌|google).{0,25}(越狱|越獄|自主入侵|入侵三家|自主接入)', re.I), 'gemini_hack_incident'),
 ]
 
 def entity_key(title, summary):
@@ -436,6 +525,21 @@ def entity_key(title, summary):
         if rx.search(combined):
             return key
     return None
+
+def backfill_summary(rep, group):
+    """代表摘要为空时的回填 (2026-09-09 + 2026-09-20):
+
+    ① 优先取组内有摘要成员 (中文标题优先, 再按 hot) — 解决 HN 英文无摘要版压过有摘要中文版;
+    ② 组内都无摘要时退用视频说明文字 caption — 否则单源 BBC 视频条目显示 (无摘要)。
+    """
+    if rep.get('summary'):
+        return
+    cands = [a for a in group if a.get('summary')]
+    if cands:
+        rep['summary'] = sorted(cands, key=lambda a: (bool(re.search(r'[\u4e00-\u9fff]', a['title'])),
+                                                      a['hot_score']), reverse=True)[0]['summary']
+    elif rep.get('caption'):
+        rep['summary'] = rep['caption']
 
 def group_events(articles):
     """全量事件分组: entity_key 优先, 否则 norm(title)[:40] 指纹"""
@@ -464,7 +568,30 @@ PRIORITY_EVENTS = [
     (re.compile(r'(amodei|阿莫迪|安特罗匹克|anthropic|阿莫戴).{0,60}(slow ?down|slowdown|slow(?!\w)|放缓|放慢|减速|刹车|警告|warn)'
                 r'|(slow ?down|slowdown|放缓|放慢|减速|刹车).{0,55}((?<![a-z])ai(?![a-z])|a\.i\.?|人工智能|前沿)'
                 r'|((?<![a-z])ai(?![a-z])|a\.i\.?|人工智能).{0,55}(slow ?down|slowdown|放缓|放慢|减速|刹车)', re.I), '科技/AI'),
+    # 2026-09-19: 巴菲特卸任伯克希尔董事长 (6源合并后 hot 11, 与另外 4 条同为 11 分的普通条目竞争排第 6 位被 TOP5 截断;
+    # 56 年任期终结为当日最大财经人事事件, 同类 2026-08-09 Hassabis 案例 / 2026-09-15 放缓辩论案例)
+    (re.compile(r'(buffett|巴菲特).{0,60}(steps? down|stepping down|卸任|接任|chairman|董事長|董事长)|(chairman|董事長|董事长|卸任).{0,40}(buffett|巴菲特)', re.I), '财经/投资'),
 ]
+
+def apply_priority_events(results, topic_articles, priority_events=None):
+    """重点事件保底插入: 大事件 hot 分不足被 TOP5 截断时替换该主题末位 (内部替换, 无返回)。
+
+    2026-09-20: ①候选改为跨主题查找 — 保底规则的目标主题(如 科技/AI)与 classify 实际判定的分类可能不一致
+    (事件组代表若是 华尔街见闻/FT 等 category=财经 源, 会被 category +3 权重拉去 财经/投资), 旧写法
+    cands 恒空 → 机制静默失效 (实测 09-20: AI 放缓辩论组 rep hot11 落在 财经/投资, 未被插入 科技/AI, 事件全天不显示);
+    ②排除已出现在任一主题 TOP5 的事件, 防跨分类重复展示同一条。
+    """
+    for prx, ptopic in (priority_events if priority_events is not None else PRIORITY_EVENTS):
+        if not results.get(ptopic):
+            continue
+        if any(prx.search(a['title'] + ' ' + a['summary']) for a in results[ptopic]):
+            continue
+        shown = {id(a) for t2 in results for a in results[t2]}
+        cands = [a for t2 in topic_articles for a in topic_articles[t2]
+                 if id(a) not in shown and prx.search(a['title'] + ' ' + a['summary'])]
+        if cands:
+            best = max(cands, key=lambda a: (a['hot_score'], bool(a['pub_date'])))
+            results[ptopic][-1] = best
 
 # ── 主流程 ────────────────────────────────────────────
 conn = sqlite3.connect(DB)
@@ -509,6 +636,7 @@ for r in rows:
         continue
     articles.append({
         'id': r['id'], 'feed_name': feed, 'title': title, 'summary': summary,
+        'caption': video_caption(r['summary'] or ''),  # 2026-09-20: 视频说明文字兜底 (仅当摘要为空且组内无正文可回填时用)
         'link': r['link'], 'pub_date': r['pub_date'] or '',
         'category': r['category'] or '', 'hot_score': r['hot_score'] or 0,
     })
@@ -520,11 +648,8 @@ for g in events:
     rep, nsrc = pick_representative(g)
     rep['nsrc'] = nsrc
     # 2026-09-09: 摘要回填 — 代表无摘要时取组内有摘要成员 (中文优先, 再按 hot), 解决 HN 无摘要版压过有摘要中文版
-    if not rep['summary']:
-        cands = [a for a in g if a.get('summary')]
-        if cands:
-            best_s = sorted(cands, key=lambda a: (bool(re.search(r'[\u4e00-\u9fff]', a['title'])), a['hot_score']), reverse=True)[0]
-            rep['summary'] = best_s['summary']
+    # 2026-09-20: 组内无成员有摘要时, 退用视频说明文字 caption (否则单源视频条目显示 (无摘要))
+    backfill_summary(rep, g)
     event_reps.append((rep, g))
 
 # 2) 分类
@@ -557,16 +682,8 @@ for t in KEYWORDS:
         merged.append(a)
     results[t] = merged[:5]
 
-# 重点事件保底插入: 大事件 hot 分不足被截断时替换 TOP5 末位
-for prx, ptopic in PRIORITY_EVENTS:
-    if not results.get(ptopic):
-        continue
-    if any(prx.search(a['title'] + ' ' + a['summary']) for a in results[ptopic]):
-        continue
-    cands = [a for a in topic_articles[ptopic] if prx.search(a['title'] + ' ' + a['summary'])]
-    if cands:
-        best = max(cands, key=lambda a: (a['hot_score'], bool(a['pub_date'])))
-        results[ptopic][-1] = best
+# 重点事件保底插入: 大事件 hot 分不足被截断时替换 TOP5 末位 (候选跨主题查找, 见 apply_priority_events)
+apply_priority_events(results, topic_articles)
 
 # ── 输出 ──────────────────────────────────────────────
 from datetime import datetime

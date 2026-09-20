@@ -864,3 +864,299 @@ class TestNoise20260918:
         # 旧字符类无逗号 → 署名吃满 50 字窗口 (canada_eu_associate 代表实测)
         s = clean_summary('MATINA STEVIS-GRIDNEFF, JEANNA SMIALEK2026年9月17日周三，加拿大欢迎欧盟准成员提案')
         assert s.startswith('加拿大欢迎'), repr(s)
+
+
+class TestOpenaiTransparency20260919:
+    """2026-09-19: OpenAI 披露模型"异常行为"透明度报告 (德国之声14/IT之家9/FT6/Engadget6/华尔街见闻3 共5源
+    标题各异不合并: discloses new 'concerning' behavior / 披露 GPT-5.6 Sol 异常行为 / reveals more instances…)"""
+
+    MERGE_CASES = [
+        ("OpenAI discloses new 'concerning' behavior",
+         'New transparency reports from OpenAI show that som'),
+        ("OpenAI discloses new 'concerning' model behaviour",
+         'Developer launches system to track and report AI model'),
+        ("OpenAI reveals more instances of concerning AI model behaviors during testing", ''),
+        ("OpenAI 披露 GPT-5.6 Sol 异常行为：AI 模型会留下指令要求“未来版本的自己”隐瞒自身错误", ''),
+        ('当AI开始"撒谎"，OpenAI披露旗舰模型六起"异常行为"', ''),
+    ]
+
+    def test_all_map_to_same_key(self):
+        for t, s in self.MERGE_CASES:
+            assert entity_key(t, s) == 'openai_transparency', (t, entity_key(t, s))
+
+    def test_no_false_positive(self):
+        # 无 concerning/异常行为/透明度报告 语境的普通 OpenAI 新闻不并
+        for t in ['OpenAI launches new pricing tier for enterprise customers',
+                  "OpenAI and Anthropic don't need regulations to pace frontier models"]:
+            assert entity_key(t, '') is None, (t, entity_key(t, ''))
+
+    def test_merge_across_sources(self):
+        arts = [_art("OpenAI discloses new 'concerning' behavior", feed='德国之声', hot=14),
+                _art('OpenAI 披露 GPT-5.6 Sol 异常行为：模型会隐瞒自身错误', feed='IT之家', hot=9, cat='科技')]
+        groups = group_events(arts)
+        assert len(groups) == 1 and len(groups[0]) == 2, f'{len(groups)} 组'
+
+
+class TestGoogleCcAgent20260919:
+    """2026-09-19: Google 发布新实验性 "CC" AI 智能体 (Engadget12/TechCrunch12/Ars12 三源同事件标题各异不合并)"""
+
+    MERGE_CASES = [
+        ("Google's revamped CC is an AI agent for families and groups", ''),
+        ("Google’s new ‘CC’ is an AI agent that helps families run their households", ''),
+        ('Google announces new experimental "CC" AI agent for families', ''),
+    ]
+
+    def test_all_map_to_same_key(self):
+        for t, s in self.MERGE_CASES:
+            assert entity_key(t, s) == 'google_cc_agent', (t, entity_key(t, s))
+
+    def test_no_false_positive(self):
+        # Verge "Google will now let any AI agent run your smart home"(hot15) 无 CC 产品名 → 不同事件不并
+        for t in ['Google will now let any AI agent run your smart home',
+                  'Google announces Gemini 3.6 Flash for developers']:
+            assert entity_key(t, '') is None, (t, entity_key(t, ''))
+
+    def test_merge_across_sources(self):
+        arts = [_art("Google's revamped CC is an AI agent for families and groups", feed='Engadget', hot=12),
+                _art('Google announces new experimental "CC" AI agent for families', feed='Ars Technica', hot=12)]
+        groups = group_events(arts)
+        assert len(groups) == 1 and len(groups[0]) == 2, f'{len(groups)} 组'
+
+
+class TestXiUsVisit20260919:
+    """2026-09-19: 习近平访美随行企业高管名单 (中央社 + RFI 两条同事件标题各异不合并)"""
+
+    MERGE_CASES = [
+        ('南華早報：中際旭創、小米、寧德時代等代表可能隨習近平訪美',
+         '川習會預計將於24日登場，隨同中國國家主席習近平訪美的名單也備受關注'),
+        ('比亚迪、小米等公司高管或随习近平访美 黄仁勋、奥特曼等美高管将出席国宴',
+         '据路透社援引三位知情人士报导称，华盛顿和北京方面正在敲定一份随同中国国家主席习近平即将访美行程的中国'),
+    ]
+
+    def test_all_map_to_same_key(self):
+        for t, s in self.MERGE_CASES:
+            assert entity_key(t, s) == 'xi_us_visit', (t, entity_key(t, s))
+
+    def test_no_false_positive(self):
+        for t in ['习近平会见美国工商界代表', '特朗普表示将访美企业纳入关税豁免']:
+            assert entity_key(t, '') is None, (t, entity_key(t, ''))
+
+
+class TestBuffettStepdown20260919:
+    """2026-09-19: 巴菲特卸任伯克希尔董事长 (BBC11/DW11/虎嗅3/HN3/NYT3/中央社3 共6源标题各异不合并,
+    hot 11 与 4 条普通条目并列被挤出 TOP5 → 同批加 PRIORITY_EVENTS 保底插入)"""
+
+    MERGE_CASES = [
+        ("Warren Buffett steps down after six decades at Berkshire - 'Father Time always wins'", ''),
+        ('Warren Buffett steps down as Berkshire Hathaway chairman',
+         "Buffett's son, Howard, will succeed him in the rol"),
+        ('巴菲特71岁的儿子，接任董事长', '有“股神”之称的传奇投资人沃伦·巴菲特正式卸任伯克希尔·哈撒韦董事长'),
+        ('96歲巴菲特致信波克夏股東　宣布卸任董事長', ''),
+        ('Warren Buffett Steps Down as Berkshire Chairman, Names Son to Replace Him', ''),
+    ]
+
+    def test_all_map_to_same_key(self):
+        for t, s in self.MERGE_CASES:
+            assert entity_key(t, s) == 'buffett_stepdown', (t, entity_key(t, s))
+
+    def test_no_false_positive(self):
+        for t in ['Berkshire Hathaway reports record quarterly operating profit',
+                  '巴菲特指标显示美股估值处于历史高位']:
+            assert entity_key(t, '') is None, (t, entity_key(t, ''))
+
+    def test_priority_event_registered(self):
+        topics = [t for rx, t in NS['PRIORITY_EVENTS']
+                  if rx.search('Warren Buffett steps down as Berkshire Hathaway chairman')]
+        assert topics == ['财经/投资'], topics
+
+
+class TestSaLowSignalTranscript20260919:
+    """2026-09-19: SA 会议材料续 — 'Discusses … Transcript' / 'Analyst/Investor Day Transcript'
+    漏过旧规则 (q1/q2/commentary/slideshow/…) 占财经/投资 TOP5"""
+
+    SA = NS['SA_LOW_RE']
+
+    def test_transcript_variants_matched(self):
+        for t in ['Vicinity Centres Stapled Securities (CNRAF) Discusses Capability Showcase With Focus on '
+                  'Development Strategy and Asset Portfolio Transcript',
+                  'AeroVironment, Inc. (AVAV) Analyst/Investor Day Transcript',
+                  'Zeta Global Holdings Corp. (ZETA) Discusses AI Strategy Evolution, Infrastructure Transformation']:
+            assert self.SA.search(t.lower()), t
+
+    def test_legit_sa_news_not_matched(self):
+        # 正常财报新闻不应被 SA_LOW_RE 命中
+        for t in ['NVIDIA beats Q3 revenue estimates as data center demand surges',
+                  'Apple Q4 earnings preview: what to watch']:
+            assert not self.SA.search(t.lower()), t
+
+
+class TestNoise20260919:
+    """2026-09-19: HN 开发工具细枝末节帖 (Claude Code AGENTS.md, HN hot14 占科技/AI TOP3) +
+    BBC Business 街头采访软内容 ('I would tip up to 30% at a restaurant' hot11 进财经候选)"""
+
+    def test_hn_devtool_post_noise(self):
+        # 同题 IT之家转述版一并过滤 (同一非头条事件, 同类 ankidroid/neovim/派早报)
+        assert is_noise('Claude Code now reads AGENTS.md if there is no Claude.md')
+        assert is_noise('Claude Code 宣布添加支持“AI 通用说明书”AGENTS.md')
+
+    def test_street_interview_noise(self):
+        assert is_noise("'I would tip up to 30% at a restaurant' New Yorkers and Londoners share what they usually")
+
+    def test_legit_news_not_noise(self):
+        assert not is_noise('Anthropic 发布 Claude Code 新版本，支持子代理并行')
+        assert not is_noise('European markets tipped to open higher after Fed hike')
+
+
+class TestSiliconSpeciesClassify20260919:
+    """2026-09-19: AI 风险/超级智能类话题 → 科技/AI
+    (BBC Business 'Uncontrolled AI could lead to silicon species' hot17 因 category=财经 +3 且财经关键词=0 误分财经/投资 TOP1)"""
+
+    def test_ai_risk_goes_tech(self):
+        t = "Uncontrolled AI could lead to 'silicon species' rivalling humans, warns Microsoft"
+        s = 'Mustafa Suleyman says he believes rival AI firm Anthropic'
+        assert classify(t + ' ' + s, '财经') == '科技/AI'
+
+    def test_plain_finance_still_finance(self):
+        assert classify('Fed raises rates for the first time in three years', '财经') == '财经/投资'
+
+
+class TestGeminiHackIncident20260920:
+    """2026-09-20: Gemini 越狱后自主入侵三家真实企业 (Verge18/FT12/DW12/TechCrunch9/BBC World9/Engadget9/
+    IT之家6/格隆汇3/第一财经3 共 9 条 10 源) 必须合并为一条 — 此前同一事件同时占 科技/AI TOP1 与 财经/投资 TOP3"""
+
+    EN = [
+        'Gemini went rogue, hacked three companies, and Google hid it',
+        'Google’s Gemini hacked three companies in new AI safety incident',
+        "Google's Gemini AI hacked 3 companies during testing",
+        'Google’s Gemini is the latest AI model to hack other companies',
+        "Google's Gemini AI hacked three companies in security test",
+        'Google Gemini also escaped its testing environment and hacked three companies',
+    ]
+    ZH = [
+        '谷歌首次公开 Gemini 越狱事件：在测试中自主入侵三家真实公司且自行终止，已通知涉事企业',
+        '谷歌Gemini在安全测试中自主入侵三家真实企业 公司称未构成模型错配且未主动披露',
+        '谷歌Gemini在安全测试中自主入侵三家真实企业',
+    ]
+
+    def test_all_map_to_same_key(self):
+        keys = {entity_key(t, '') for t in self.EN + self.ZH}
+        assert keys == {'gemini_hack_incident'}, keys
+
+    def test_same_event_one_group(self):
+        arts = [_art(t, feed=f'F{i}') for i, t in enumerate(self.EN + self.ZH)]
+        groups = group_events(arts)
+        assert len(groups) == 1, [len(g) for g in groups]
+
+    def test_no_false_positive(self):
+        # Gemini 模型发布/评论 (无入侵语境) 与 其他谷歌安全新闻 (无 gemini 锚点) 不得并入
+        for t in ['刚刚，Gemini 4 Pro偷跑上线！碾压Astra和Fable',
+                  'Gemini三度窥秘越轨，AI失控大祸将临？',
+                  'Google patches Chrome zero-day exploited by hackers in the wild',
+                  '谷歌修复 Chrome 高危漏洞，黑客已利用',
+                  'Gemini 3.8 Flash and 3.8 Flash Cyber']:
+            k = entity_key(t, '')
+            assert k != 'gemini_hack_incident', (t, k)
+
+
+class TestBbcVideoCaptionFallback20260920:
+    """2026-09-20: 单源 BBC 视频条目摘要 = 说明文字时不得显示 (无摘要)
+    (实测 BBC 中文 "OpenAI 的奥特曼：世界'理应感到恐惧'…" 条目, 组内无中文正文可回填)"""
+
+    RAW = ('<div></div><div><div><noscript><strong>你的器材不支持播放多媒体材料</strong></noscript></div>'
+           '<button type="button"><span>Play video, &quot;Why is Donald Trump so opposed to regulating AI?&quot;,'
+           ' 节目全长 1,12</span><div></div></div></div></div>')
+    RAW_WATCH = ('<div><noscript><strong>你的器材不支持播放多媒体材料</strong></noscript></div>'
+                 '<button><span>Play video, &quot;Watch: How will higher interest rates impact US consumers?&quot;,'
+                 ' 节目全长 1,18</span>')
+
+    def test_summary_empty_for_caption_only(self):
+        # clean_summary 仍返回空 (保留 09-13 意图: 让组内其他源正文优先回填)
+        assert clean_summary(self.RAW, 'BBC 中文') == ''
+
+    def test_caption_extracted(self):
+        assert NS['video_caption'](self.RAW) == 'Why is Donald Trump so opposed to regulating AI?'
+
+    def test_watch_prefix_stripped(self):
+        cap = NS['video_caption'](self.RAW_WATCH)
+        assert cap.startswith('How will higher interest rates impact US consumers'), cap
+
+    def test_short_phrase_caption_without_time(self):
+        # DB 中部分摘要截断在 "节目全长 2,00" (无 HH:MM) 亦应识别
+        raw = '你的器材不支持播放多媒体材料 Play video, 西藏泥石流最震撼衝擊畫面遭受中國官媒審查 , 节目全长 2,00'
+        assert NS['video_caption'](raw) == '西藏泥石流最震撼衝擊畫面遭受中國官媒審查'
+        assert clean_summary(raw, 'BBC 中文') == ''
+
+    def test_backfill_prefers_group_body_over_caption(self):
+        rep = _art('Trump 5000 check', summary='', feed='BBC 中文', hot=19)
+        rep['caption'] = 'Three times Trump has promised money to Americans'
+        other = _art('特朗普真的能向每位美国成年人发放5,000美元吗', summary='美媒算账：总额高达1.2万亿美元',
+                     feed='华尔街见闻', hot=6)
+        NS['backfill_summary'](rep, [rep, other])
+        assert rep['summary'].startswith('美媒算账'), rep['summary']
+
+    def test_backfill_uses_caption_when_group_has_no_body(self):
+        rep = _art('OpenAI 的奥特曼：世界理应感到恐惧', summary='', feed='BBC 中文', hot=14)
+        rep['caption'] = 'Why is Donald Trump so opposed to regulating AI?'
+        NS['backfill_summary'](rep, [rep])
+        assert rep['summary'] == rep['caption']
+
+    def test_caption_not_used_when_body_present(self):
+        # 正文 + 尾部说明文字: 正文必须保留 (旧写法 `^.{0,90}?节目全长` 会把正文一并吞掉)
+        raw = '<p>图像来源，Getty Images</p><p>特朗普宣布新的关税措施，市场应声下跌。</p><span>Watch: 说明文字, 节目全长 1,12 01:12</span>'
+        s = clean_summary(raw, 'BBC 中文')
+        assert '关税措施' in s and '节目全长' not in s, s
+
+
+class TestPriorityEventsCrossTopic20260920:
+    """2026-09-20: 重点事件保底插入的候选必须跨主题查找
+    (目标主题 科技/AI 与 classify 结果不一致时旧写法 cands 恒空 → 机制静默失效)"""
+
+    def _setup(self):
+        rx = re.compile(r'slowdown|放缓')
+        top = [_art(f'普通条目{i}', hot=14 - i) for i in range(5)]
+        rep = _art('Anthropic 呼吁放缓 AI 发展', hot=11, cat='财经')
+        results = {'科技/AI': list(top), '财经/投资': []}
+        topic_articles = {'科技/AI': list(top), '财经/投资': [rep]}
+        return rx, results, topic_articles, rep
+
+    def test_candidate_found_in_other_topic(self):
+        rx, results, topic_articles, rep = self._setup()
+        NS['apply_priority_events'](results, topic_articles, priority_events=[(rx, '科技/AI')])
+        assert results['科技/AI'][-1] is rep
+
+    def test_skip_when_already_in_target_top5(self):
+        rx, results, topic_articles, _ = self._setup()
+        results['科技/AI'][4] = _art('事件已在榜：AI 放缓 slowdown 辩论', hot=5)
+        NS['apply_priority_events'](results, topic_articles, priority_events=[(rx, '科技/AI')])
+        assert results['科技/AI'][4]['title'].startswith('事件已在榜')
+
+    def test_no_cross_topic_duplicate(self):
+        # 该事件已在别的主题 TOP5 展示时不再插入, 防跨分类重复
+        rx, results, topic_articles, rep = self._setup()
+        results['财经/投资'] = [rep]
+        NS['apply_priority_events'](results, topic_articles, priority_events=[(rx, '科技/AI')])
+        assert rep not in results['科技/AI']
+
+
+class TestNoise20260920:
+    """2026-09-20: IT之家消费电子发售续四 + HN 一次性博客帖 + 文化/地方治安软内容 + Engadget 消费评论"""
+
+    def test_consumer_launch_noise(self):
+        for t in ['达尔优 A5 头戴式游戏耳机发布：CS / 三角洲行动 / 竞技模式一键切换，预售 369 元起',
+                  '与索尼 A7C 系列竞争，消息称尼康下周发布 Z5IIC 全画幅相机',
+                  '京东：苹果 iPhone 18 Pro 系列开售 1 小时，全国已有 3 万用户签收新机']:
+            assert is_noise(t), t
+
+    def test_non_event_posts_noise(self):
+        for t in ['GPT-6 Astra Solves a WWI German Radio Cipher',
+                  'Aztec manuscript loaned back to Mexico after two centuries',
+                  'Why buy a streaming device when you have a smart TV?']:
+            assert is_noise(t), t
+
+    def test_legit_news_not_noise(self):
+        for t in ['尼康上调财年利润预期，影像业务营收创新高',
+                  '京东物流第三季度营收同比增长 12%',
+                  'OpenAI 发布 GPT-6 Astra 新版本，支持更长上下文',
+                  '苹果 M6 芯片 GPU 跑分曝光，相比 M5 提升约 20%',
+                  '墨西哥总统与特朗普会面讨论关税']:
+            assert not is_noise(t), t

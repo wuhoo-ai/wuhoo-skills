@@ -68,6 +68,8 @@ def clean_summary(s, feed_name=''):
         s = re.sub(r'^.{0,160}?图像来源[，,、\s]*', '', s, count=1, flags=re.DOTALL)
         s = re.sub(r'^[A-Za-z][A-Za-z\s/&.\-]*?(?=\s*[0-9\u4e00-\u9fff])', '', s)
         s = re.sub(r'Published\s+.*?阅读时间:?\s*[\d\s]*分钟?', '', s, flags=re.I)
+        # 2026-09-27: BBC 中文 "Published 2026年9月23日最近更新…" 变体（无 阅读时间 后缀，习访美条目实测残留占满摘要窗）
+        s = re.sub(r'Published\s+.*$', '', s, flags=re.I)
         s = re.sub(r'^\s*\d{4}年\d{1,2}月\d{1,2}日\s*阅读时间:?\s*[\d\s]*分钟?', '', s)  # 中文日期变体, 前导空格容错 (2026-08-31)
         if re.fullmatch(r'[A-Za-z\s/&.\-]{1,50}', s):
             s = ''  # 纯拉丁 byline/credit 残留 (如 "Getty Images"), 无正文 (2026-09-02)
@@ -107,7 +109,7 @@ def video_caption(raw):
 VIDEO_CAP_RE = re.compile(r'^(.*?)节目全长\s*\d+,\d+\s*(?:\d{1,2}:\d{2})?', re.DOTALL)
 
 # ── Feed 级过滤 ───────────────────────────────────────
-FEED_NOISE_RE = re.compile(r'arxiv|知乎日报', re.I)
+FEED_NOISE_RE = re.compile(r'arxiv|知乎日报|b站|bilibili', re.I)
 SPORT_FEED_RE = re.compile(r'football|soccer|sport', re.I)
 # 2026-09-19: 扩 transcript/discusses/analyst-investor day — 实测 'Vicinity Centres … Discusses Capability Showcase … Transcript'(hot11)
 # 与 'AeroVironment … Analyst/Investor Day Transcript'(hot11) 漏过旧规则占财经/投资 TOP5
@@ -333,6 +335,56 @@ NOISE_PATTERNS = [
     # 实测 'Noble Carbon will show how it's making EV charger installs painless at TechCrunch Disrupt' hot6 占产业/公司 TOP2,
     # 48h 内同类 5 条; 词边界 'disrupt\b' 防误伤 Ars 'Microsoft disrupts AI-assisted platform…')
     r'techcrunch disrupt\b',
+    # 2026-09-26 新增 — HN 一次性技术帖 (非新闻事件; 同类 marty/neovim/radio cipher/pirate face;
+    # 实测 'Platform-independent SIMD in Go' 无摘要占产业/公司 TOP1)
+    'platform-independent simd',
+    # 2026-09-28 新增 — HN 个人博客泛评论帖 (非新闻事件; 同类 apple is getting this wrong/works better in the app;
+    # 实测 'When did Google get so weird?' (sancho.bearblog.dev) hot14 占科技/AI TOP5)
+    'google get so weird',
+    # 2026-09-28 新增 — IT之家消费电子发售续七 (同类 米家/漫步者/九州风神/台电/影石;
+    # 实测 '小米 REDMI X 系列 RGB-Mini LED 2027 竞技版上架盲订' hot6 占产业/公司 TOP2)
+    r'\bredmi\b.*(上架|开售|首销|盲订|预售|发售)',
+    # 2026-09-28 新增 — IT之家消费电子发售/导购续八 (同类 米家/绿联系外设软文;
+    # 实测 '绿联推出 65W 旅行转换充电器…169 元 预售' 占产业/公司 TOP5)
+    r'绿联.*(推出|预售|开售|上架|首销|发售)',
+    # 2026-09-27 新增 — HN 一次性博客/回顾帖 (非新闻事件; 同类 marty/neovim/pirate face;
+    # 实测 'Breaking Up with Google Play: Why Conversations Is Now Free' / 'Fifteen years later, the Apple Cards origin story' 无摘要占科技/AI TOP2-3)
+    'breaking up with google play', 'apple cards origin story',
+    # 2026-09-27 新增 — IT之家消费电子发售续六 (同类 米家/漫步者/台电; 实测 华硕a豆100W充电器Wiggle联名上架
+    # / 米家吸顶灯C高显色上架 / 小米18 Fold首销情况曝光(博主爆料) 占产业/公司 TOP1-3)
+    r'a\s*豆.*(上架|开售|首销|发售|预售)', '吸顶灯', '首销情况曝光',
+    # 2026-09-27 新增 — 游戏发售跳票 (同类 gta/深海迷航; 实测 'Hell Is Us 地狱即我们' Switch2 跳票占产业 TOP5)
+    'hell is us', '地狱即我们',
+    # 2026-09-27 新增 — 名人回顾软文 (实测 '巴菲特卸任董事长，他的3大投资成功秘诀' 朝鲜日报中文 抢下 buffett_stepdown 组代表位)
+    '投资成功秘诀',
+    # 2026-09-27 新增 — SA 单股评论帖 (同类 fortrea; 实测 'Nvidia CEO Pushes Back On The AI Apocalypse' 无摘要占科技/AI TOP5)
+    'pushes back on the',
+    # 2026-09-29 新增 — HN 个人博客/文化特稿/诉讼细枝帖 (非头条事件; 同类 google get so weird/marty;
+    # 实测 'So long Google, and thanks for all the nudes' 占科技/AI TOP4、
+    # 'Unsealed Briefs in Authors' Case v. Microsoft/OpenAI' 诉讼程序稿占 TOP2、
+    # 'Kids turned low-traffic NPR Spotify comments into a secret group chat' 网络文化特稿占产业/公司 TOP1)
+    'thanks for all the nudes', 'unsealed briefs', 'npr spotify',
+    # 2026-09-30 新增 — BBC Business 个人理财软文续 (同类: written my will/pay into my pension;
+    # 实测 "You need £17,000 for a first home - here's how to do it" hot11 占财经/投资 TOP4)
+    'for a first home',
+    # 2026-09-30 新增 — 游戏收录/娱乐内容 (同类: gta/hell is us; "Codenames Party is the latest addition
+    # to Netflix Games" hot6 占产业/公司 TOP5)
+    'netflix games', 'codenames',
+    # 2026-09-30 新增 — IT之家平台促销软文 (非独立新闻事件; "阿里 Qoder 平台 Qwen3.8-Flash 限时免费
+    # 活动延期" hot6 占产业/公司 TOP4, 同类 直降/best deals)
+    '限时免费',
+    # 2026-09-30 新增 — IT之家消费电子发售续八 (同类: 达尔优/尼康限产品词; "松下 Technics 首款磁流体
+    # 头戴耳机 EAH-A1000 发布" hot6 占产业/公司 TOP3; 限定 耳机/耳麦 词防 "松下发布财报" 类真新闻)
+    '松下.*(耳机|耳麦)', 'technics.*(耳机|耳麦|发布)', '磁流体.*耳机',
+    # 2026-09-30 续 — BBC 高校消费评测软文 (同类 written my will/first home; "Unis are offering degrees
+    # in content creation for £30,000. But are they worth it?" hot11 递补占财经 TOP5)
+    'degrees in content creation', 'content creation degrees',
+    # 2026-09-30 续 — 网红社媒话题 (非企业新闻; "张雪机车回应网传团队在意大利被盗" hot6 占产业 TOP4)
+    '网传.{0,12}被盗',
+    # 2026-09-30 续 — 游戏预购公告 (同类 gta/hell is us 游戏娱乐; "索尼《战神：劳菲》公布预购奖励" hot6 占产业 TOP5)
+    '战神.{0,8}劳菲', '预购奖励',
+    # 2026-09-30 续 — 虎嗅消费生活方式稿 (同类 鹅腿阿姨/无醇啤酒; "60cm长蛋挞9月卖出超12万" 占产业 TOP5)
+    '蛋挞',
 ]
 
 def is_noise(text):
@@ -526,6 +578,12 @@ ENTITY_KEYS = [
     # 2026-09-13: 特朗普"每人5000美元支票"中期选举承诺 (BBC 中文 hot19 + 华尔街见闻 + 格隆汇 + 卫报 同事件标题各异不合并;
     # BBC 版摘要为视频字幕残留 → 合并后 [N源] + 中文摘要回填。防误并: 数字前置禁接数字(115,000-seat 类子串)、后置禁接 亿/billion(5000亿美元关税为不同事件)、须含特朗普/trump 上下文(律师罚 5000 美元不合并);
     # 数字 '5,000' 经 entity 标点归一(逗号→空格)变 '5 000' → 模式写 5[,\s]?000 双格式容错)
+    # 2026-09-30: 特朗普白宫 AI 协议（英伟达/OpenAI/Anthropic/xAI/谷歌/微软签"道德约束力"AI 治理自律协议）
+    # 见闻15/格隆汇12/RFI12/第一财经3 分散，同一事件拆占 财经TOP1+宏观TOP2 两榜；特朗普/白宫 + 签署/道德/自律/pledge 语境共现
+    (re.compile(r'(trump|特朗普|白宫|white house).{0,80}(道德约束|道德|自律|pledge|ethic|safety standard|安全标准)|(签署|sign(?:s|ed|ing)?).{0,30}(道德|ethic|自律|人工智能|ai).{0,40}(协议|pledge|agreement)', re.I), 'trump_ai_pledge'),
+    # 2026-09-30: MongoDB CEO 辞职加盟 Meta（HN14 裸标题无摘要 + TechCrunch9 "hires MongoDB CEO" 同事件拆占；
+    # 带 resign/join/hire 语境防 MongoDB 财报/股价类其他事件误并，泛公司名裸词禁止规则）
+    (re.compile(r'mongodb.{0,40}(resign|join|hire)|(hire|resign).{0,20}mongodb', re.I), 'mongodb_meta'),
     (re.compile(r'(trump|特朗普).{0,60}(?<!\d)(5[,\s]?000|五千)(?!\s*(?:亿|billion|trillion)).{0,15}(美元|支票|红利|发放|发钱|payments?|checks?|payouts?)|(?<!\d)(5[,\s]?000|五千)(?!\s*(?:亿|billion|trillion)).{0,15}(美元|支票|红利|发放|发钱|payments?|checks?|payouts?).{0,60}(trump|特朗普)', re.I), 'trump_5000_check'),
     # 2026-09-14: OpenAI 智能体攻击 RubyGems 事件披露 (HN14/中央社9/Engadget6/Verge6/第一财经3 共5源; 与 Hugging Face 事故同一调查线,
     # 各源标题差异极大: HN 直述 RubyGems / 中央社 "代理再爆失控" / 第一财经 "AI进化速递" / Engadget 以 "before the Hugging Face incident" 指代 /

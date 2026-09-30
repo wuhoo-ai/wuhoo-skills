@@ -1313,3 +1313,114 @@ class TestBriefing20260925:
         assert entity_key(t, s) == 'us_pmi_rate_hike'
         # 真·美联储加息报道仍归 fed_rate_hike
         assert entity_key("Fed hikes rates for first time in three years", "") == 'fed_rate_hike'
+
+
+class TestBriefing20260927:
+    """2026-09-27: HN 博客回顾帖 + IT之家外设/爆料稿 + 游戏跳票 + 巴菲特秘诀软文 + SA 评论帖 + BBC Published 变体"""
+
+    def test_new_noise(self):
+        for t in ['Breaking Up with Google Play: Why Conversations Is Now Free',
+                  'Fifteen years later, the Apple Cards origin story',
+                  '华硕 a 豆 100W 氮化镓充电器 Wiggle 联名款上架：2C+1A，支持小米澎湃秒充，169 元',
+                  '小米推出米家吸顶灯 C 高显色版本：Ra95 全光谱灯珠',
+                  '小米 18 Fold 中折叠首销情况曝光：9 月 7 日-13 日约 3.97 万台',
+                  '《Hell Is Us 地狱即我们》任天堂 Switch 2 版跳票至 10 月 27 日发售',
+                  '巴菲特卸任董事长，他的3大投资成功秘诀',
+                  "Nvidia CEO Pushes Back On The 'AI Apocalypse,' But The Risk Of A Slowdown Remains"]:
+            assert is_noise(t), t
+
+    def test_legit_news_not_noise(self):
+        for t in ['苹果 iPad 12 爆料：A19 芯片、8GB 内存、自研 N1/C1X 芯片',
+                  '巴菲特宣布卸任伯克希尔董事长，继任者出炉',
+                  'Google Play 调整开发者分成政策，回应欧盟裁决']:
+            assert not is_noise(t), t
+
+    def test_bbc_published_variant_stripped(self):
+        # "Published 2026年9月23日最近更新…" 无 阅读时间 后缀变体
+        s = clean_summary('习近平时隔11年的首次对美国事访问实际将逗留不到两天。Published 2026年9月23日最近更新')
+        assert s.startswith('习近平'), repr(s)
+
+
+class TestBriefing20260928:
+    """2026-09-28: HN 个人博客泛评论帖 + REDMI 电视上架盲订"""
+
+    def test_new_noise(self):
+        for t in ['When did Google get so weird?',
+                  '年轻人的第一台 RGB 游戏电视，小米 REDMI X 系列 RGB-Mini LED 2027 竞技版上架',
+                  '绿联推出 65W 旅行转换充电器：无极旋转插脚适配美 / 澳 / 欧 / 英规、2C+1A，169 元']:
+            assert is_noise(t), t
+
+    def test_legit_news_not_noise(self):
+        for t in ['REDMI Note 15 Pro 发布：天玑 7400 芯片、120Hz 高刷屏',
+                  'Google 被欧盟罚款 27 亿欧元，反垄断裁决出炉',
+                  '索尼芯片子公司将收紧远程办公：要求约 8000 名员工全面返岗']:
+            assert not is_noise(t), t
+
+
+class TestBriefing20260929:
+    """2026-09-29: HN 博客/文化特稿/诉讼程序帖噪声 + B站排行榜 feed 级过滤"""
+
+    def test_new_noise(self):
+        for t in ['So long Google, and thanks for all the nudes',
+                  "Unsealed Briefs in Authors' Case v. Microsoft/OpenAI",
+                  'Kids turned low-traffic NPR Spotify comments into a secret group chat']:
+            assert is_noise(t), t
+
+    def test_feed_noise_bilibili(self):
+        assert NS['FEED_NOISE_RE'].search('B站排行榜')
+        assert NS['FEED_NOISE_RE'].search('bilibili')
+        assert not NS['FEED_NOISE_RE'].search('BBC 中文')
+
+    def test_legit_news_not_noise(self):
+        for t in ['OpenAI 承认模型越权访问，发布透明度报告',
+                  '微软重组 XBOX 游戏工作室，《帝国时代》团队新作遭取消',
+                  'Google DeepMind 发布 Gemini 4 预览版']:
+            assert not is_noise(t), t
+
+
+class TestBriefing20260930:
+    """2026-09-30: 特朗普白宫AI协议合并 + MongoDB CEO 转投 Meta + BBC理财软文/游戏收录/促销噪声"""
+
+    def test_trump_ai_pledge_merged(self):
+        EK = NS['entity_key']
+        # 华尔街见闻/格隆汇/RFI/见闻热门 同事件（白宫AI协议）
+        cases = [
+            ('特朗普会晤科技巨头：签署AI"道德约束"协议，推行行业自律监管，"AI远超工业革命"', ''),
+            ('白宫人工智能协议：英伟达、OpenAI、Anthropic、xAI、谷歌将定期讨论人工智能安全标准。', ''),
+            ('科技公司高管签署了一项"具有道德约束力的协议"', ''),
+        ]
+        keys = {EK(clean_title(t), clean_summary(s)[:50]) for t, s in cases}
+        assert keys == {'trump_ai_pledge'}, keys
+
+    def test_trump_ai_pledge_no_false_merge(self):
+        EK = NS['entity_key']
+        # 不相关特朗普新闻与不相关协议新闻不并入
+        assert EK('特朗普签署行政令 收紧移民执法', '') != 'trump_ai_pledge'
+        assert EK('英法签署防务协议 不涉及美国', '') != 'trump_ai_pledge'
+
+    def test_mongodb_meta_merged(self):
+        EK = NS['entity_key']
+        assert EK('MongoDB CEO resigns to join Meta', '') == 'mongodb_meta'
+        assert EK('Meta launches enterprise AI platform, hires MongoDB CEO to lead new initiative', '') == 'mongodb_meta'
+        # MongoDB 财报类新闻不并入
+        assert EK('MongoDB Q2 revenue beats estimates on database growth', '') != 'mongodb_meta'
+
+    def test_new_noise(self):
+        for t in ['You need £17,000 for a first home - here\'s how to do it',
+                  'Codenames Party is the latest addition to Netflix Games',
+                  '阿里 Qoder 平台 Qwen3.8-Flash 限时免费活动延期，10 月之后继续用',
+                  '松下 Technics 首款磁流体头戴耳机 EAH-A1000 发布，国行 2599 元',
+                  'Unis are offering degrees in content creation for £30,000. But are they worth it?',
+                  '张雪机车回应网传"团队在意大利被盗"：全员安全',
+                  '索尼公布《战神：劳菲》游戏预购奖励，明日开启预购',
+                  '60cm长蛋挞9月卖出超1200万根，谁在赚钱？能红多久？']:
+            assert is_noise(t), t
+
+    def test_legit_news_not_noise(self):
+        for t in ['松下发布截至3月财年年度报告：营业利润同比增长8%',
+                  'Netflix 上调订阅价格，流媒体涨价潮蔓延',
+                  '英伟达发布新一代 GPU 架构',
+                  '荷兰法院裁定索尼PlayStation垄断赔偿案']:
+            assert not is_noise(t), t
+
+

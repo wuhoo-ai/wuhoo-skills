@@ -300,6 +300,16 @@ NOISE_PATTERNS = [
     # 2026-10-05 新增 — BBC 中文深度专栏/解释性特稿 (栏目名式标题带问号, 无新闻事件本体, 常缺正文;
     # 同类 dw users on life/everyone everywhere/索要小费; 实测 "西班牙与中国愈走愈近，欧盟多方为何不满？" 占宏观 TOP2 (无摘要))
     '为何不满', 'cosying up',
+    # 2026-10-06 新增 — 同日复查暴露 4 组: BBC 中文健康解释特稿(晕车占产业TOP1)/BBC 解释性特稿变体
+    # (加拿大"为何要为…做准备"无摘要占宏观TOP4)/CoinDesk 周度栏目前瞻(Crypto Week Ahead 占财经TOP5,
+    # 同类 早餐FM/会员早报/下周重磅日程)/游戏停服公告(最终幻想7永恒危机占产业TOP5, 同类 gta/暗黑破坏神)
+    '晕车', 'motion sickness', '为何要为', 'crypto week ahead',
+    '停服', '最终幻想',
+    # 中央社劳工维权人物稿 (社会新闻误入产业/公司, 同类 王莉霞受贿)
+    '馮睿|冯睿|勞權事件',
+    # 2026-10-06 新增 — 电影档期票房 (娱乐数据误入产业/公司; 旧模式 票房破/五一档票房 不覆盖
+    # "国庆档电影票房已超7亿"变体, 同类 票房榜)
+    '电影票房|档期.*票房|票房已超',
     # 2026-09-10 新增 — BBC Future 特稿 (机器人索要小费趋势文, 非新闻事件; 同类: dw users on life/月经周期)
     '索要小费', '猫眼如何启发', '貓眼為何',
     # 2026-09-10 新增 — BBC Business 个人理财软文 (同类: money disagre/lend me £10k/back to school; 实测 09-08 财经 TOP10 第6位)
@@ -773,6 +783,23 @@ ENTITY_KEYS = [
     # 2026-10-05: 小米 Vision GT 入驻 Gran Turismo 7 (IT之家 "十月入驻…首次推出电车驾驶教学" + "十月即将正式入驻…首台中国 Vision GT"
     # 两条衍生稿拆占产业 TOP2+TOP4; 具体产品名 vision gt 48h 窗口内即该事件)
     (re.compile(r'vision\s*gt|vision\s*gran\s*turismo', re.I), 'xiaomi_vision_gt'),
+    # 2026-10-07: 谷歌发布 EmbeddingGemma 2 多模态嵌入模型 (HN17 裸标题无摘要 + DeepMind14 无摘要 + IT之家3 + 华尔街见闻3 四源不合并,
+    # 拆占科技/AI TOP1+TOP4; 具体产品名 embeddinggemma 48h 窗口内即该发布事件; 中文版摘要经 backfill 回填)
+    (re.compile(r'embedding[\s\-]*gemma', re.I), 'embeddinggemma_2'),
+    # 2026-10-07: OpenAI 公布数学开放问题成果 (OpenAI Blog 14 + HN14 英文标题不合并, 拆占科技/AI TOP2+TOP3;
+    # 标题原文 "Sharing AI progress in mathematics" 双版一致, 直接锚定; HN 版正文只有 github.com/openai/math 链接)
+    (re.compile(r'sharing ai progress|openai/math', re.I), 'openai_math_progress'),
+    # 2026-10-07: OpenAI 在欧盟为 ChatGPT/Codex 文本输出加隐形水印 (Verge12 + IT之家6 + TechCrunch6 + Engadget6 + Ars6 五源不合并,
+    # 占科技/AI TOP5 且 [N源] 失效; watermark 泛词必须与 chatgpt/openai/codex 共现, 中文分支同锚)
+    (re.compile(r'(chatgpt|openai|codex)[\s\S]{0,60}watermark|watermark[\s\S]{0,60}(chatgpt|openai|codex)'
+                r'|(chatgpt|openai|codex)[\s\S]{0,60}水印|水印[\s\S]{0,60}(chatgpt|openai|codex)', re.I), 'openai_eu_watermark'),
+    # 2026-10-07: 德国前情报局长 Hanning 被捕(为外国势力获取机密) (DW×3 + BBC World + HN + 德国之声中文 六源拆占宏观 TOP4+TOP5 两席;
+    # 双锚点: 人物/机构词 (hanning/spy chief/情报局长/foreign intelligence/bnd) + 逮捕语境词 (arrest/treason/espionage/被捕/...)。
+    # 防误并: "Spy chief warns Russia conflict risk"(现任局长警告, 无逮捕语境) 不并; "FBI arrests woman accused of spying for China"(无 spy chief 锚) 不并;
+    # "Trump chooses top spy boss to run AI taskforce"(spy boss 非锚词, 且无逮捕词) 不并。treason 裸词不入(防其他叛国案)
+    (re.compile(r'(?=[\s\S]*(hanning|spy chief|spymaster|前情报局长|情报局长|foreign intelligence|(?<![a-z])bnd(?![a-z])))'
+                r'(?=[\s\S]*(arrest|detain|treason|espionag|被捕|被拘|卖国|allegation|scandal|huge success))', re.I),
+     'germany_spy_arrest'),
 ]
 
 def entity_key(title, summary):

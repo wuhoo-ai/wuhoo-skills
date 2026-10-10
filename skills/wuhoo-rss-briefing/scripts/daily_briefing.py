@@ -118,6 +118,15 @@ ENGADGET_GUIDE_RE = re.compile(r'^(how to|considering)\b', re.I)  # 2026-09-13: 
 
 # ── 噪声模式 (全量, skill 2026-08-20 版) ───────────────
 NOISE_PATTERNS = [
+    # 2026-10-08 新增 — BBC 中文社会新闻/解释性特稿 (台北同志酒吧搜查 hot19 占宏观 TOP1、普京黑海别墅
+    # "为何要暗地重建？" 栏目名式特稿占宏观 TOP5，同类 为何不满/为何要为)；TechCrunch 消费者趣闻稿
+    # (Amazon 'flat buttocks' 占产业 TOP3)；The Verge 促销汇总 (Kindle Paperwhite 30 percent off 占产业
+    # TOP5，同类 best deals/half off；'percent off' 48h 实测仅命中导购措辞，不误伤 "tariffs cut by 30 percent"
+    # 类新闻——后者用 cut/reduced 动词不接 percent off 形)；虎嗅诺奖培养体制评论特稿 (日本为何不断产生诺奖科学家)
+    '同志酒吧', '黑海别墅', '元首行宫', 'flat buttocks', 'percent off', '不断产生诺奖',
+    # 2026-10-08 续查 — The Verge Alexa aux 接口功能退化趣闻稿(消费者小毛病, 非事件, 占产业 TOP4)；
+    # 中央社富比世移民富豪榜榜单稿(榜单聚合非新闻事件, 占宏观 TOP4)
+    'aux input', '移民富豪榜',
     # 2026-09-25: TechCrunch "streaming inflation" 流媒体涨价趋势评论 (inflation 命中宏观表占宏观 TOP4，非政策事件)
     'streaming inflation',
     # 2026-09-25: 独立 AI 驾驶基准演示站 (drivingbench.com, HN "GPT-6 Astra has gained the ability to drive a car"
@@ -452,6 +461,24 @@ NOISE_PATTERNS = [
     # 2026-10-03 新增 — BBC Business Gen Z 弃领养老金个人叙事软文 (同类 pay into my pension/written my will;
     # 实测 "'It could cost me £10k but I need the money now': Why Gen Z are opting out of pensions" 占财经 TOP5)
     r'opting out of pension',
+    # 2026-10-10 新增 — 诺奖文学奖(Anne Carson) 文化奖项非资讯事件 (德国之声11 靠'加拿大'命中宏观表占宏观 TOP1;
+    # 同类: 虎嗅'残雪村上春树陪跑'评论稿 / IT之家·Solidot·BBC World·HN 各版)
+    r'anne carson|诺贝尔文学|諾貝爾文學|literature prize|literary prize',
+    # 2026-10-10 新增 — IT之家散热/水冷配件厂商新品 (同类: 利民散热器/九州风神/瓦尔基里; 实测
+    # 'Alphacool 带来多款 GPU 单槽冷头' 占科技/AI TOP4)
+    r'alphacool.*(冷头|散热|水冷|显卡)',
+    # 2026-10-10 新增 — IT之家双十一促销导购稿 (同类: 直降/best deals/京东开售; 实测
+    # '小米空调 11.11 强劲风 1.5 匹 1850 元…新低' 占产业/公司 TOP2)
+    r'11[\.\s]*11.*(元|新低|抢|券)', '双十一全面抢', '京东家居家电',
+    # 2026-10-10 新增 — BBC Business 纪录片/人物评论软文 (非企业新闻; 同类 street interview/dw users on life;
+    # 实测 "Mark Zuckerberg has an image problem - so why is Meta's business booming?" 占财经 TOP3)
+    r'image problem',
+    # 2026-10-10 新增 — 流媒体剧集预告片/收视宣传稿 (娱乐宣传非企业新闻; 'Watch the trailer for 'The
+    # Altruists,' Netflix's show about the FTX scandal' 因 FTX 命中产业表占产业 TOP5; 同类 gta/netflix games)
+    r'watch the trailer|the altruists',
+    # 2026-10-10 新增 — Engadget 'Everything X has announced so far' 月度汇总栏目 (聚合已报道事件非独立新闻;
+    # 同类 IT早报/会员早报; 实测占产业/公司 TOP5)
+    r'announced so far',
 ]
 
 def is_noise(text):
@@ -563,6 +590,12 @@ def classify(text, category_field):
     # 科技表 '研究' 命中误分科技/AI TOP4; 地缘间谍事件属宏观)
     if re.search(r'军情五处|\bmi5\b|间谍|espionage|intelligence agency|情报机构', text, re.I):
         scores['宏观政策'] += 3
+    # 2026-10-08: 公司财报话题 → 产业/公司 (HN "JetBrains reports revenue growth, net financial loss for 2025"
+    # hot 高但因 'growth/增长' 命中宏观表 + 无摘要 误入宏观 TOP5; 营收/亏损/财报属公司动态。
+    # 限定非财经 category 才加(财经源市场稿已有 category +3, 防止被拉去产业/公司))
+    if category_field not in ('财经', '投资') and re.search(
+            r'reports? revenue|revenue growth|net (financial )?loss|财报|財報|营收|營收|亏损|虧損', text, re.I):
+        scores['产业/公司'] += 3
     # database category 加权 (只信 财经/投资/ai)
     cm = {'财经': '财经/投资', '投资': '财经/投资', 'ai': '科技/AI'}
     if category_field in cm:
@@ -766,7 +799,17 @@ ENTITY_KEYS = [
     (re.compile(r'(openai|chatgpt|altman|奥特曼)[\s\S]{0,120}(?<![a-z])ipo(?![a-z])|(?<![a-z])ipo(?![a-z])[\s\S]{0,120}(openai|chatgpt|altman|奥特曼)', re.I), 'openai_ipo_delay'),
     # 2026-10-03: 车企月度销量/交付放榜 (IT之家 '9月汽车销量/交付榜出炉' + '交付汇总(持续更新)' 两条同题材稿拆占产业 TOP1-2;
     # 只并聚合稿(须含 榜/汇总/出炉/成绩单), 单车企产销公告 ('比亚迪9月销量463561辆…') 无聚合词不并、保留为独立公司事件)
-    (re.compile(r'(汽车|车企|新能源)[\s\S]{0,20}(销量|交付|产销)[\s\S]{0,20}(榜|汇总|出炉|成绩单|交卷)', re.I), 'china_auto_monthly_sales'),
+        (re.compile(r'(汽车|车企|新能源)[\s\S]{0,20}(销量|交付|产销)[\s\S]{0,20}(榜|汇总|出炉|成绩单|交卷)', re.I), 'china_auto_monthly_sales'),
+    # 2026-10-10: 中欧贸易争端缓和(电动车出口限制换 trade war avert) — 德国之声6 'EU envoy in China to avert trade war'
+    # + NYT6 'China and Europe Step Back From Trade War With Limits on Chinese Car Exports' + 卫报6 'minerals…avert China trade war'
+    # 拆占宏观 TOP4-5。双锚点 lookahead: (eu|europe|欧盟|欧洲) + (china|中国) + trade war/deescalate 语境。
+    # 防误并: 美加贸易战(us_canada)/单纯中欧峰会稿无 trade war|step back|出口限制 锚不并
+    (re.compile(r'((?=[\s\S]*(eu\b|europe|欧盟|歐洲|欧洲|中歐|中欧))(?=[\s\S]*(china|中国|中華|中国|中歐|中欧))(?=[\s\S]*(trade war|贸易战|step back|avert|de-escalat|出口限制|export limit|car export|电动车)))', re.I), 'eu_china_trade_deescalation'),
+    # 2026-10-10: OpenAI 实际年化营收低于此前信号(FT 独家披露) — HN14 'OpenAI annualised revenues $20B less
+    # than previously signalled'(英文裸标题无摘要) 与 IT之家 'OpenAI 年化营收被曝接近 500 亿美元，比预期少了约 200 亿'
+    # 同事件拆占 科技TOP4+产业TOP5 两榜。双 lookahead: openai + 营收词(annualis|年化营收|revenue) + 低于预期语境
+    # (less than|shortfall|below|低于|少了|不及)。防误并: openai IPO/融资稿无 revenue 词不命中 (走 openai_ipo_delay)
+    (re.compile(r'(?=[\s\S]*openai)(?=[\s\S]*(?:annualis|年化营收|年化收入|revenues?\b|营收|營收))(?=[\s\S]*(?:less than|shortfall|below expectation|低于|少了|不及|少于))', re.I), 'openai_revenue_shortfall'),
     # 2026-10-05: OpenAI 安全元老 David Robinson 辞职死谏 (见闻14 "12朝元老辞职死谏"/TechCrunch "resigns…culture is broken"/
     # Verge "safety employee has quit"/HN×2 "I Quit OpenAI…"/格隆汇×2/一财/IT之家/虎嗅 8+ 源标题各异不合并 →
     # 拆占 科技/AI TOP2+财经 TOP3 两榜。三锚点 lookahead (10-02 教训: 英文锚点顺序不可预测用共现不用距离);
@@ -775,7 +818,14 @@ ENTITY_KEYS = [
     # 2026-10-05: OpenAI 解雇 3 名向外部安全评估组织泄密员工 (BBC Business14 "fires workers for mishandling
     # sensitive information" + Engadget6 "fires three employees who allegedly shared info with an external AI safety group"
     # 同事件不合并; 锚点 openai+fire(词边界防 wildfire/fires break out)+泄密语境; 置于 australia_hack 类规则后无冲突)
-    (re.compile(r'((?=[\s\S]*openai)(?=[\s\S]*\bfires?\b[\s\S]*(mishandl|sensitive|shared info|external|evaluation group))|(?=[\s\S]*openai)(?=[\s\S]*(mishandl|泄密)[\s\S]*\bfires?\b))', re.I), 'openai_data_leak_firings'),
+    # 2026-10-10: 同事件后续「被解雇研究员公开信反驳」报道并入 — BBC14 'Fired OpenAI researchers say they
+    # were let go for prioritising safety'(摘要截断50字无mishandl) + Engadget14 'dispute their dismissals in
+    # open letter' + TechCrunch6 'warn of chilling effect' 三源拆占 科技TOP3+财经TOP4 两榜。
+    # 重写为三锚 lookahead (openai + 解雇语系 + 泄密/研究员/寒蝉语境)；原两分支词汇集入。
+    # 防误并: robinson 辞职死谏规则在前抢先; \bfires?\b 词边界防 wildfire; 无 openai 锚不命中
+    (re.compile(r'(?=[\s\S]*openai)(?=[\s\S]*(?:\bfires?\b|泄密|解雇|dismissal|fired|let go|open letter))'
+                r'(?=[\s\S]*(?:mishandl|sensitive|shared info|external|evaluation group|泄密|研究员|学者'
+                r'|chilling|misconduct|dispute|prioritisi|safety research))', re.I), 'openai_data_leak_firings'),
     # 2026-10-05: 埃塞俄比亚政府军收复提格雷首府机场 (德国之声11 "government forces reclaim Tigray capital airport"
     # + BBC World3 "rebel forces withdraw from Tigray regional capital" 同事件英文表述相反视角不合并;
     # 锚点须 tigray/提格雷 + 军事进退词 (reclaim/withdraw/retake/收复/撤出); DW 和平斡旋评论稿 "broker a new peace" 无进退词不并 (独立分析)
@@ -800,6 +850,30 @@ ENTITY_KEYS = [
     (re.compile(r'(?=[\s\S]*(hanning|spy chief|spymaster|前情报局长|情报局长|foreign intelligence|(?<![a-z])bnd(?![a-z])))'
                 r'(?=[\s\S]*(arrest|detain|treason|espionag|被捕|被拘|卖国|allegation|scandal|huge success))', re.I),
      'germany_spy_arrest'),
+    # 2026-10-08: 2026 诺贝尔物理学奖(Halzen/冰立方中微子) 10+ 源拆榜 — 虎嗅11/凤凰财经11/德国之声11/见闻11
+    # 同事件标题各异(南极望远镜/ghost particles/冰疙瘩/独揽)不合并, 拆占 财经TOP2+TOP5 两席; 锚点用物理奖专属词
+    # (halzen/icecube/冰立方/neutrino/中微子/物理奖变体); 防误并: "诺奖经济学家背书AI就业"Acemoglu 稿与和平奖
+    # 川普自认稿均无物理锚点不命中
+    (re.compile(r'halzen|icecube|冰立方|(?<![a-z])neutrino|中微子|诺贝尔物[理理]|諾貝爾物[理理]|物理[奖獎]|'
+                r'nobel\s*(prize\s*)?(in\s*)?physics|physics\s*nobel', re.I), 'nobel_physics_2026'),
+    # 2026-10-08: 2026 诺贝尔化学奖(Kagan/Soai 手性/自催化) 6 源拆榜 — 见闻11/德国之声11/RFI/中央社/凤凰财经/
+    # BBC World/Ars 各占各榜; 锚点化学奖专属词; 防误并: 裸'手性/chiral'不设(论文稿), 物理组无化学词不并
+    (re.compile(r'kagan|(?<![a-z])soai(?![a-z])|诺贝尔化[学學]|諾貝爾化[学學]|化[学學][奖獎]|'
+                r'nobel\s*(prize\s*)?(in\s*)?chemistry|chemistry\s*nobel', re.I), 'nobel_chemistry_2026'),
+    # 2026-10-08: 微软 Surface Laptop Ultra / RTX Spark 发布会 (IT之家12 售价公布 + TechCrunch12 "Nvidia-chip AI PCs
+    # with revamped Windows 11" + Verge12 "Everything announced" + Engadget×3 + IT之家探秘/Dev Box/Copilot 衍生稿
+    # 各拆占科技 TOP5; entity 匹配文本=title+clean_summary[:50], TechCrunch 摘要 50 字窗口够不到 Surface 字样,
+    # 须按其标题原文词形单独分支。rtx spark 分支要求与微软/microsoft/surface 共现距 80 — 防"戴尔 XPS 16 配
+    # RTX Spark"(另一厂商独立公告)误并; Verge "first Nvidia RTX Spark laptops $7,000" 无微软锚不并(平台综述稿, 可接受))
+    (re.compile(r'surface\s*laptop\s*ultra|surface旗舰新机|microsoft releases new nvidia-chip'
+                r'|(?<![a-z])rtx\s*spark[\s\S]{0,80}(微软|microsoft|surface)|(微软|microsoft|surface)[\s\S]{0,80}(?<![a-z])rtx\s*spark', re.I),
+     'surface_laptop_ultra'),
+    # 2026-10-08: 艾美奖转播权转至亚马逊 Prime Video (IT之家12 "…亚马逊 Prime Video 拿下艾美奖全球独家直播权" +
+    # TechCrunch12 "Emmys will move from broadcast TV to Prime Video in 2027" + Engadget12 "The Emmy Awards are
+    # moving to Prime Video" 三源拆占产业 TOP2/3/5; 双向距离 80(裸 lookahead 交替在"锚点在前的中文语序"下失效,
+    # 见 us_canada_trade_war 10-10 教训), 锚点 emmy/艾美 与 prime video/亚马逊 共现)
+    (re.compile(r'(prime\s*video|亚马逊|amazon)[\s\S]{0,80}((?<![a-z])emmys?(?![a-z])|艾美)'
+                r'|((?<![a-z])emmys?(?![a-z])|艾美)[\s\S]{0,80}(prime\s*video|亚马逊|amazon)', re.I), 'emmys_prime_video'),
 ]
 
 def entity_key(title, summary):

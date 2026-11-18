@@ -27,7 +27,7 @@ feeds:
   - 深度
   status: ✅ 新增 (2026-06-18, 战术分析)
 - name: Sky Sports Football
-  url: https://www.skysports.com/rss/12040
+  url: https://www.skysports.com/rss/11095  # 2026-11-18: 12040实为综合体育频道(混板球ODI/F1/赛马), 11095纯足球(实测Nations League等)
   category: 足球
   tags:
   - 足球
@@ -158,7 +158,7 @@ feeds:
   - 英文
   status: ✅
 - name: arXiv AI 论文
-  url: http://export.arxiv.org/rss/cs.AI
+  url: "http://export.arxiv.org/api/query?search_query=cat:cs.AI&sortBy=submittedDate&sortOrder=descending&max_results=30"
   category: 科技
   tags:
   - AI
@@ -254,7 +254,7 @@ feeds:
   - 全球
   status: ✅ RSSHub 新增
 - name: arXiv 量化金融
-  url: http://export.arxiv.org/rss/q-fin
+  url: "http://export.arxiv.org/api/query?search_query=cat:q-fin&sortBy=submittedDate&sortOrder=descending&max_results=30"
   category: 投资
   tags:
   - 量化
@@ -294,7 +294,7 @@ feeds:
   - 全球
   status: ✅ RSSHub 新增
 - name: 半岛电视台
-  url: http://127.0.0.1:1200/aljazeera/news
+  url: https://www.aljazeera.com/xml/rss/all.xml
   category: 综合
   tags:
   - 综合
@@ -491,6 +491,424 @@ feeds:
   - 英文
   - 原生
   status: ✅ 新增 (2026-07-03, verified)
+- name: 上交所科创板
+  url: http://127.0.0.1:1200/sse/renewal
+  category: 投资
+  tier: T0
+  tags:
+  - A股
+  - 科创板
+  - 公告
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T0)
+- name: 上交所披露
+  url: http://127.0.0.1:1200/sse/disclosure
+  category: 投资
+  tier: T0
+  tags:
+  - A股
+  - 公告
+  - 披露
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T0)
+- name: 美联储新闻
+  url: https://www.federalreserve.gov/feeds/press_all.xml
+  category: 财经
+  tier: T0
+  tags:
+  - 央行
+  - 美联储
+  - 官方
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T0)
+- name: 财联社电报
+  url: http://127.0.0.1:1200/cls/telegraph
+  category: 财经
+  tier: T1
+  tags:
+  - 快讯
+  - A股
+  - 实时
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T1)
+- name: 财联社加红
+  url: http://127.0.0.1:1200/cls/telegraph/red
+  category: 财经
+  tier: T1
+  tags:
+  - 快讯
+  - 重要
+  - 实时
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T1)
+- name: 财联社公司公告
+  url: http://127.0.0.1:1200/cls/telegraph/announcement
+  category: 财经
+  tier: T1
+  tags:
+  - 公告
+  - 公司
+  - 实时
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T1)
+- name: 财联社深度
+  url: http://127.0.0.1:1200/cls/depth/1000
+  category: 财经
+  tier: T1
+  tags:
+  - 深度
+  - 财经
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T1)
+- name: 金十重要
+  url: http://127.0.0.1:1200/jin10/1
+  category: 财经
+  tier: T1
+  tags:
+  - 快讯
+  - 宏观
+  - 实时
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T1)
+- name: 金十数据
+  url: http://127.0.0.1:1200/jin10
+  category: 财经
+  tier: T1
+  tags:
+  - 快讯
+  - 宏观
+  - 实时
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T1)
+- name: 华尔街见闻实时
+  url: http://127.0.0.1:1200/wallstreetcn/live
+  category: 财经
+  tier: T1
+  tags:
+  - 快讯
+  - 宏观
+  - 实时
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T1)
+- name: 格隆汇首页
+  url: http://127.0.0.1:1200/gelonghui/home
+  category: 财经
+  tier: T1
+  tags:
+  - 港股
+  - A股
+  - 深度
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T1)
+- name: 晚点LatePost
+  url: http://127.0.0.1:1200/latepost
+  category: 科技
+  tier: T2
+  tags:
+  - 深度
+  - 商业
+  - 中国
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T2)
+- name: 财新最新
+  url: http://127.0.0.1:1200/caixin/latest
+  category: 财经
+  tier: T2
+  tags:
+  - 深度
+  - 财经
+  - 中国
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T2)
+- name: 观察者网
+  url: http://127.0.0.1:1200/guancha
+  category: 综合
+  tier: T2
+  tags:
+  - 时政
+  - 中国
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T2)
+- name: 参考消息
+  url: http://127.0.0.1:1200/cankaoxiaoxi
+  category: 综合
+  tier: T2
+  tags:
+  - 国际
+  - 中文
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T2)
+- name: MIT科技评论
+  url: http://127.0.0.1:1200/technologyreview
+  category: 科技
+  tier: T2
+  tags:
+  - 深度
+  - 科技
+  - 英文
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T2)
+- name: 巴伦中文
+  url: http://127.0.0.1:1200/barronschina
+  category: 财经
+  tier: T2
+  tags:
+  - 美股
+  - 投资
+  - 中文
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T2)
+- name: 36氪快讯
+  url: http://127.0.0.1:1200/36kr/newsflashes
+  category: 科技
+  tier: T2
+  tags:
+  - 快讯
+  - 创业
+  - 中国
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T2)
+- name: CNBC
+  url: https://www.cnbc.com/id/100003114/device/rss/rss.html
+  category: 财经
+  tier: T2
+  tags:
+  - 美股
+  - 财经
+  - 英文
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T2)
+- name: MarketWatch
+  url: https://feeds.marketwatch.com/marketwatch/topstories/
+  category: 财经
+  tier: T2
+  tags:
+  - 美股
+  - 财经
+  - 英文
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T2)
+- name: HN头版
+  url: https://hnrss.org/frontpage
+  category: 科技
+  tier: T2
+  tags:
+  - 科技
+  - 编程
+  - 硅谷
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T2)
+- name: Anthropic新闻
+  url: http://127.0.0.1:1200/anthropic/news
+  category: AI
+  tier: T4
+  tags:
+  - AI
+  - Claude
+  - 官方
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T4)
+- name: UnusualWhales
+  url: http://127.0.0.1:1200/unusualwhales/news
+  category: 投资
+  tier: T4
+  tags:
+  - 美股
+  - 期权
+  - 异动
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T4)
+- name: ImportAI
+  url: https://importai.substack.com/feed
+  category: AI
+  tier: T4
+  tags:
+  - AI
+  - 周报
+  - 英文
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T4)
+- name: 触乐
+  url: http://127.0.0.1:1200/chuapp
+  category: 游戏
+  tier: T4
+  tags:
+  - 游戏
+  - 中文
+  - 深度
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T4)
+- name: GameDiscoverCo
+  url: https://newsletter.gamediscover.co/feed
+  category: 游戏
+  tier: T4
+  tags:
+  - 游戏
+  - 市场
+  - 英文
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T4)
+- name: GamesIndustry
+  url: https://www.gamesindustry.biz/feed
+  category: 游戏
+  tier: T4
+  tags:
+  - 游戏
+  - 产业
+  - 英文
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T4)
+- name: Unity博客
+  url: https://blog.unity.com/feed
+  category: 游戏
+  tier: T4
+  tags:
+  - 游戏
+  - Unity
+  - 引擎
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T4)
+- name: arXiv NLP
+  url: "http://export.arxiv.org/api/query?search_query=cat:cs.CL&sortBy=submittedDate&sortOrder=descending&max_results=30"
+  category: AI
+  tier: T0
+  tags:
+  - AI
+  - NLP
+  - 论文
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T0)
+- name: arXiv 机器学习
+  url: "http://export.arxiv.org/api/query?search_query=cat:cs.LG&sortBy=submittedDate&sortOrder=descending&max_results=30"
+  category: AI
+  tier: T0
+  tags:
+  - AI
+  - ML
+  - 论文
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T0)
+- name: arXiv 图形学
+  url: "http://export.arxiv.org/api/query?search_query=cat:cs.GR&sortBy=submittedDate&sortOrder=descending&max_results=30"
+  category: 游戏
+  tier: T0
+  tags:
+  - 图形学
+  - 渲染
+  - 论文
+  status: ✅ WP0新增 (2026-11-16, 实测OK, T0)
+- name: Endpoints News
+  url: https://endpts.com/feed/
+  user_agent: "Mozilla/5.0 (compatible; wuhoo-news-rss/1.0)"
+  category: 医药
+  tier: T2
+  tags:
+  - 医药
+  - 生物
+  - 英文
+  - 原生
+  status: ✅ 新增 (2026-11-18, 实测200/24items, 医药深度; 源站拦非浏览器UA→user_agent覆盖)
+- name: STAT News
+  url: https://www.statnews.com/feed/
+  category: 医药
+  tier: T2
+  tags:
+  - 医药
+  - 健康
+  - 英文
+  - 原生
+  status: ✅ 新增 (2026-11-18, 实测200/20items)
+- name: CnEVPost
+  url: https://cnevpost.com/feed/
+  category: 新能源
+  tier: T2
+  tags:
+  - 新能源
+  - 电动车
+  - 英文
+  - 原生
+  status: ✅ 新增 (2026-11-18, 实测200/50items, 中国电动车)
+- name: InsideEVs
+  url: https://insideevs.com/rss/articles/all/
+  user_agent: "Mozilla/5.0 (compatible; wuhoo-news-rss/1.0)"
+  category: 新能源
+  tier: T2
+  tags:
+  - 新能源
+  - 电动车
+  - 英文
+  - 原生
+  status: ✅ 新增 (2026-11-18, 实测200/20items; 源站对非浏览器UA回HTML挑战页→user_agent覆盖)
+- name: Cointelegraph
+  url: https://cointelegraph.com/rss
+  category: 加密
+  tier: T2
+  tags:
+  - 加密
+  - 区块链
+  - 英文
+  - 原生
+  status: ✅ 新增 (2026-11-18, 实测200/30items)
+- name: Decrypt
+  url: https://decrypt.co/feed
+  category: 加密
+  tier: T2
+  tags:
+  - 加密
+  - 区块链
+  - 英文
+  - 原生
+  status: ✅ 新增 (2026-11-18, 实测200/37items)
+- name: PANews
+  url: http://127.0.0.1:1200/panewslab/news
+  category: 加密
+  tier: T2
+  tags:
+  - 加密
+  - 中文
+  - RSSHub
+  status: ✅ 新增 (2026-11-18, 实测200/50items, 中文链媒)
+- name: Odaily星球日报
+  url: http://127.0.0.1:1200/odaily/newsflash
+  category: 加密
+  tier: T2
+  tags:
+  - 加密
+  - 中文
+  - RSSHub
+  - 快讯
+  status: ✅ 新增 (2026-11-18, 实测200/100items)
+- name: Product Hunt
+  url: https://www.producthunt.com/feed
+  category: 科技
+  tier: T4
+  tags:
+  - 产品
+  - AI
+  - 独立开发
+  - 英文
+  - 原生
+  status: ✅ 新增 (2026-11-18, 实测200/50items, 补热榜盲区8/15)
+- name: GameLook
+  url: http://www.gamelook.com.cn/feed
+  category: 游戏
+  tier: T4
+  tags:
+  - 游戏
+  - 产业
+  - 中文
+  - 原生
+  status: ✅ 新增 (2026-11-18, 实测200/15items, 游戏大观)
+- name: IGN
+  url: https://feeds.feedburner.com/ign/games-all  # 2026-11-18: ign/all混影视娱乐(James Bond选角等), games-all纯游戏(实测20条全游戏)
+  category: 游戏
+  tier: T4
+  tags:
+  - 游戏
+  - 英文
+  - 原生
+  status: ✅ 新增 (2026-11-18, 实测200/20items)
+- name: 机核
+  url: https://www.gcores.com/rss
+  category: 游戏
+  tier: T4
+  tags:
+  - 游戏
+  - 文化
+  - 中文
+  - 原生
+  status: ✅ 新增 (2026-11-18, 实测200/20items)
+- name: Defense News
+  url: https://www.defensenews.com/arc/outboundfeeds/rss/
+  category: 军工
+  tier: T2
+  tags:
+  - 军工
+  - 国防
+  - 地缘
+  - 英文
+  - 原生
+  status: ✅ 新增 (2026-11-18, 实测200/10items, 军工用户提权)
+- name: 澎湃新闻
+  url: http://127.0.0.1:1200/thepaper/featured
+  category: 综合
+  tier: T2
+  tags:
+  - 社会
+  - 中文
+  - RSSHub
+  - 深度
+  status: ✅ 新增 (2026-11-18, 实测200/21items, 补社会盲区)
 settings:
   rsshub_base: http://127.0.0.1:1200
   fetch_interval_minutes: 60
@@ -591,17 +1009,63 @@ feed_weights:
   arXiv 量化金融: 4
   知乎日报: 3
   集思录: 5
-  BBC Sport Football: 0
-  懂球帝早报: 0
-  Sky Sports Football: 0
-  The Guardian Football: 0
-  SoccerNews: 0
-  World Soccer Talk: 0
-  Football Italia: 0
-  Breaking The Lines: 0
+  BBC Sport Football: 6
+  懂球帝早报: 6
+  Sky Sports Football: 6
+  The Guardian Football: 6
+  SoccerNews: 6
+  World Soccer Talk: 6
+  Football Italia: 6
+  Breaking The Lines: 6
+  The Telegraph Football: 6
   阮一峰: 4
   云风 BLOG: 2
   唐巧: 2
   B站排行榜: 2
   Meta (About FB): 7
   Stratechery: 9
+  上交所科创板: 9
+  上交所披露: 9
+  美联储新闻: 9
+  财联社电报: 10
+  财联社加红: 10
+  财联社公司公告: 9
+  财联社深度: 8
+  金十重要: 9
+  金十数据: 8
+  华尔街见闻实时: 9
+  格隆汇首页: 7
+  晚点LatePost: 8
+  财新最新: 8
+  观察者网: 6
+  参考消息: 6
+  MIT科技评论: 7
+  巴伦中文: 7
+  36氪快讯: 7
+  CNBC: 7
+  MarketWatch: 7
+  HN头版: 6
+  Anthropic新闻: 8
+  UnusualWhales: 7
+  ImportAI: 7
+  触乐: 6
+  GameDiscoverCo: 6
+  GamesIndustry: 6
+  Unity博客: 6
+  arXiv NLP: 5
+  arXiv 机器学习: 5
+  arXiv 图形学: 5
+  Endpoints News: 8
+  STAT News: 8
+  CnEVPost: 7
+  InsideEVs: 6
+  Cointelegraph: 7
+  Decrypt: 6
+  PANews: 7
+  Odaily星球日报: 7
+  Product Hunt: 6
+  GameLook: 7
+  IGN: 7
+  机核: 6
+  Defense News: 8
+  澎湃新闻: 7
